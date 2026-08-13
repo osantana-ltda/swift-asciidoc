@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import Foundation
 
 // Adapter for the Eclipse AsciiDoc Technology Compatibility Kit.

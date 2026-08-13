@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /// A position in an AsciiDoc source document.
 ///
 /// Every node the parser produces carries its source range. This is required

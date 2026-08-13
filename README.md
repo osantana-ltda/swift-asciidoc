@@ -73,5 +73,12 @@ depend on the surrounding application.
 
 ## Licence
 
-Not yet chosen — MIT or Apache-2.0. This must be settled before the package is
-published anywhere.
+**AGPL-3.0.** See `LICENSE`.
+
+The package is dual-licensed: it is published under AGPL-3.0, and the Bookled
+application uses it under separate terms granted by the copyright holder.
+
+**Contributions require a contributor licence agreement.** Dual licensing depends
+on single ownership of the copyright — code merged without a CLA cannot be
+relicensed, so it cannot be accepted. If you are planning a contribution, raise
+it before writing it.
