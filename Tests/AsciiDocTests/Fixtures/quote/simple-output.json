@@ -1,0 +1,65 @@
+{
+  "blocks": [
+    {
+      "blocks": [
+        {
+          "inlines": [
+            {
+              "location": [
+                {
+                  "col": 1,
+                  "line": 2
+                },
+                {
+                  "col": 7,
+                  "line": 2
+                }
+              ],
+              "name": "text",
+              "type": "string",
+              "value": "Quoted."
+            }
+          ],
+          "location": [
+            {
+              "col": 1,
+              "line": 2
+            },
+            {
+              "col": 7,
+              "line": 2
+            }
+          ],
+          "name": "paragraph",
+          "type": "block"
+        }
+      ],
+      "delimiter": "____",
+      "form": "delimited",
+      "location": [
+        {
+          "col": 1,
+          "line": 1
+        },
+        {
+          "col": 4,
+          "line": 3
+        }
+      ],
+      "name": "quote",
+      "type": "block"
+    }
+  ],
+  "location": [
+    {
+      "col": 1,
+      "line": 1
+    },
+    {
+      "col": 4,
+      "line": 3
+    }
+  ],
+  "name": "document",
+  "type": "block"
+}

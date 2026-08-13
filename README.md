@@ -9,8 +9,30 @@ being written for.
 
 ## Status
 
-**Skeleton.** The package builds and its structure is in place; the parser is not
-implemented. The TCK adapter deliberately exits non-zero until it is.
+**Block structure parses; inline syntax does not.**
+
+`Parser.parse(_:)` returns a document of nested blocks, each carrying its exact
+source range: document header with attribute entries, sections nested by level,
+paragraphs, delimited blocks (listing, literal, quote, example, sidebar,
+passthrough, open, comment), block titles and attribute lists including
+shorthand, line and block comments, and simple lists.
+
+Inside a paragraph the text is still raw lines. Inline parsing — emphasis, links,
+cross-references, macros — is the next piece of work and the larger one.
+
+Anything not modelled is kept as an `.unparsed` block rather than dropped or
+guessed at, so a table survives a round trip through a parser that does not yet
+understand tables.
+
+### Not yet implemented
+
+- Inline syntax of any kind.
+- Tables, description lists, admonitions, and list continuation (`+`).
+- Nested lists: a deeper marker stays with the item that precedes it.
+- `include::`, `ifdef::` and the rest of the preprocessor.
+- Author and revision lines are captured verbatim, not split into fields.
+- Incremental reparsing. The editor prototype has shown what that needs; this
+  parser reparses from the top.
 
 ## Scope
 
@@ -56,13 +78,38 @@ object on stdin with the document `contents`, a `path` and a `type` of `block` o
 Point the harness at the adapter built here:
 
 ```bash
-ASCIIDOC_TCK_ADAPTER=.build/debug/asciidoc-tck-adapter asciidoc-tck
+asciidoc-tck cli -c /path/to/.build/release/asciidoc-tck-adapter
 ```
 
-Two things the TCK does not do: it does not cover conversion to HTML or DocBook,
-and it cannot certify behaviour the specification does not yet define. Where the
-specification is silent, Asciidoctor's behaviour is the reference. Gaps in
-coverage are to be recorded rather than discovered by someone else's document.
+**Current result: 11 of 13 tests pass.** All eleven block cases pass. The two
+failures are the inline cases, which the adapter reports as unimplemented rather
+than answering with an empty graph — a false pass would make the report
+worthless.
+
+### The TCK is small, so most coverage has to come from elsewhere
+
+Its corpus is thirteen block cases and two inline ones. That is enough to anchor
+the encoding and nothing like enough to trust a parser on. Three other sources
+fill the gap:
+
+1. **Our own fixtures, written in the TCK's format** (`Tests/AsciiDocTests/
+   Fixtures/`), so a case can be contributed upstream rather than rewritten.
+   These are *regression* fixtures: the expected files were generated from this
+   parser and read once by eye. They make a change visible as a diff; they do
+   not prove the behaviour is correct.
+2. **Invariants over awkward input** — ranges inside the document, ranges running
+   forwards, and parsing that terminates. These catch the arithmetic slips that
+   otherwise surface as decoration drawn on the wrong characters.
+3. **Asciidoctor as an oracle.** Where the specification is silent, Asciidoctor's
+   behaviour is the reference (it is installed as `asciidoctor` on most
+   developer machines). A script that walks its AST and emits the same graph
+   would generate expected files in bulk. Worth building, with the caveat that
+   Asciidoctor does not emit an ASG — such a script encodes *our reading* of the
+   mapping, which makes it a productivity tool rather than an authority.
+
+A fourth, once a serializer exists: **round-trip testing needs no expected
+output at all.** Parse any real AsciiDoc document, write it back, and require
+the bytes to match. Every `.adoc` file in the world becomes a test case.
 
 ## Repository
 

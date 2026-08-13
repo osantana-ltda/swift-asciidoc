@@ -16,6 +16,10 @@ let package = Package(
     targets: [
         .target(name: "AsciiDoc"),
         .executableTarget(name: "TCKAdapter", dependencies: ["AsciiDoc"]),
-        .testTarget(name: "AsciiDocTests", dependencies: ["AsciiDoc"]),
+        .testTarget(
+            name: "AsciiDocTests",
+            dependencies: ["AsciiDoc"],
+            resources: [.copy("Fixtures")]
+        ),
     ]
 )

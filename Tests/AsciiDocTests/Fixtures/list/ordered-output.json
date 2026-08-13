@@ -1,0 +1,98 @@
+{
+  "blocks": [
+    {
+      "items": [
+        {
+          "location": [
+            {
+              "col": 1,
+              "line": 1
+            },
+            {
+              "col": 7,
+              "line": 1
+            }
+          ],
+          "marker": ".",
+          "name": "listItem",
+          "principal": [
+            {
+              "location": [
+                {
+                  "col": 3,
+                  "line": 1
+                },
+                {
+                  "col": 7,
+                  "line": 1
+                }
+              ],
+              "name": "text",
+              "type": "string",
+              "value": "First"
+            }
+          ],
+          "type": "block"
+        },
+        {
+          "location": [
+            {
+              "col": 1,
+              "line": 2
+            },
+            {
+              "col": 8,
+              "line": 2
+            }
+          ],
+          "marker": ".",
+          "name": "listItem",
+          "principal": [
+            {
+              "location": [
+                {
+                  "col": 3,
+                  "line": 2
+                },
+                {
+                  "col": 8,
+                  "line": 2
+                }
+              ],
+              "name": "text",
+              "type": "string",
+              "value": "Second"
+            }
+          ],
+          "type": "block"
+        }
+      ],
+      "location": [
+        {
+          "col": 1,
+          "line": 1
+        },
+        {
+          "col": 8,
+          "line": 2
+        }
+      ],
+      "marker": ".",
+      "name": "list",
+      "type": "block",
+      "variant": "ordered"
+    }
+  ],
+  "location": [
+    {
+      "col": 1,
+      "line": 1
+    },
+    {
+      "col": 8,
+      "line": 2
+    }
+  ],
+  "name": "document",
+  "type": "block"
+}

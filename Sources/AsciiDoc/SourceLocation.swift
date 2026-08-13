@@ -7,12 +7,18 @@
 /// twice over: the Abstract Semantic Graph used by the AsciiDoc TCK mandates
 /// location metadata, and an editor needs it to map syntax back to the text it
 /// decorates.
+///
+/// Offsets and columns are counted in **UTF-16 code units**. That is not the
+/// obvious choice for a language tool — UTF-8 would be — but every Apple text
+/// API this library exists to serve, `NSTextStorage` and `NSRange` above all,
+/// is UTF-16 indexed, and a conversion on every lookup would cost more than it
+/// saves.
 public struct SourceLocation: Hashable, Sendable, Comparable {
-    /// Byte offset from the start of the document.
+    /// Offset in UTF-16 code units from the start of the document.
     public let offset: Int
     /// One-based line number.
     public let line: Int
-    /// One-based column, counted in Unicode scalars rather than bytes.
+    /// One-based column, in UTF-16 code units.
     public let column: Int
 
     public init(offset: Int, line: Int, column: Int) {
@@ -40,7 +46,25 @@ public struct SourceRange: Hashable, Sendable {
         start.offset >= end.offset
     }
 
+    public var length: Int {
+        max(0, end.offset - start.offset)
+    }
+
     public func contains(_ location: SourceLocation) -> Bool {
         location.offset >= start.offset && location.offset < end.offset
+    }
+
+    /// The smallest range covering both.
+    public func union(_ other: SourceRange) -> SourceRange {
+        SourceRange(
+            start: min(start, other.start),
+            end: max(end, other.end)
+        )
+    }
+}
+
+extension SourceLocation {
+    static func max(_ lhs: SourceLocation, _ rhs: SourceLocation) -> SourceLocation {
+        lhs.offset >= rhs.offset ? lhs : rhs
     }
 }

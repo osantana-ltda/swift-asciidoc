@@ -1,0 +1,49 @@
+{
+  "blocks": [
+    {
+      "delimiter": "----",
+      "form": "delimited",
+      "inlines": [
+        {
+          "location": [
+            {
+              "col": 1,
+              "line": 3
+            },
+            {
+              "col": 15,
+              "line": 3
+            }
+          ],
+          "name": "text",
+          "type": "string",
+          "value": "let answer = 42"
+        }
+      ],
+      "location": [
+        {
+          "col": 1,
+          "line": 1
+        },
+        {
+          "col": 4,
+          "line": 4
+        }
+      ],
+      "name": "listing",
+      "type": "block"
+    }
+  ],
+  "location": [
+    {
+      "col": 1,
+      "line": 1
+    },
+    {
+      "col": 4,
+      "line": 4
+    }
+  ],
+  "name": "document",
+  "type": "block"
+}

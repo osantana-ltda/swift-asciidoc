@@ -1,0 +1,77 @@
+{
+  "attributes": {},
+  "blocks": [
+    {
+      "inlines": [
+        {
+          "location": [
+            {
+              "col": 1,
+              "line": 3
+            },
+            {
+              "col": 5,
+              "line": 3
+            }
+          ],
+          "name": "text",
+          "type": "string",
+          "value": "Body."
+        }
+      ],
+      "location": [
+        {
+          "col": 1,
+          "line": 3
+        },
+        {
+          "col": 5,
+          "line": 3
+        }
+      ],
+      "name": "paragraph",
+      "type": "block"
+    }
+  ],
+  "header": {
+    "location": [
+      {
+        "col": 1,
+        "line": 1
+      },
+      {
+        "col": 14,
+        "line": 1
+      }
+    ],
+    "title": [
+      {
+        "location": [
+          {
+            "col": 3,
+            "line": 1
+          },
+          {
+            "col": 14,
+            "line": 1
+          }
+        ],
+        "name": "text",
+        "type": "string",
+        "value": "Just A Title"
+      }
+    ]
+  },
+  "location": [
+    {
+      "col": 1,
+      "line": 1
+    },
+    {
+      "col": 5,
+      "line": 3
+    }
+  ],
+  "name": "document",
+  "type": "block"
+}

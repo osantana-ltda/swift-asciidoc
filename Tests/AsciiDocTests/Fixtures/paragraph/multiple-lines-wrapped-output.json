@@ -1,0 +1,47 @@
+{
+  "blocks": [
+    {
+      "inlines": [
+        {
+          "location": [
+            {
+              "col": 1,
+              "line": 1
+            },
+            {
+              "col": 12,
+              "line": 2
+            }
+          ],
+          "name": "text",
+          "type": "string",
+          "value": "One line\nand another."
+        }
+      ],
+      "location": [
+        {
+          "col": 1,
+          "line": 1
+        },
+        {
+          "col": 12,
+          "line": 2
+        }
+      ],
+      "name": "paragraph",
+      "type": "block"
+    }
+  ],
+  "location": [
+    {
+      "col": 1,
+      "line": 1
+    },
+    {
+      "col": 12,
+      "line": 2
+    }
+  ],
+  "name": "document",
+  "type": "block"
+}
