@@ -1,4 +1,5 @@
 // swift-tools-version: 6.3
+// Copyright (C) 2026 Osvaldo Santana Neto
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import PackageDescription

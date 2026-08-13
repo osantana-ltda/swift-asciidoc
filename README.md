@@ -73,7 +73,7 @@ depend on the surrounding application.
 
 ## Licence
 
-**AGPL-3.0.** See `LICENSE`.
+**AGPL-3.0-only.** See `LICENSE`. Copyright (C) 2026 Osvaldo Santana Neto.
 
 The package is dual-licensed: it is published under AGPL-3.0, and the Bookled
 application uses it under separate terms granted by the copyright holder.
