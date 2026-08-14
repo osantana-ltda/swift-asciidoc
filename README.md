@@ -100,12 +100,36 @@ fill the gap:
 2. **Invariants over awkward input** — ranges inside the document, ranges running
    forwards, and parsing that terminates. These catch the arithmetic slips that
    otherwise surface as decoration drawn on the wrong characters.
-3. **Asciidoctor as an oracle.** Where the specification is silent, Asciidoctor's
-   behaviour is the reference (it is installed as `asciidoctor` on most
-   developer machines). A script that walks its AST and emits the same graph
-   would generate expected files in bulk. Worth building, with the caveat that
-   Asciidoctor does not emit an ASG — such a script encodes *our reading* of the
-   mapping, which makes it a productivity tool rather than an authority.
+3. **Asciidoctor as an oracle**, where the specification is silent:
+
+   ```bash
+   swift build -c release
+   tools/compare-with-asciidoctor.py path/to/corpus
+   ```
+
+   `tools/asciidoctor-oracle.rb` walks Asciidoctor's own parse tree and emits
+   the same graph; the Python script runs both over a corpus and prints the
+   block outlines side by side wherever they disagree.
+
+   Two caveats, both in the scripts' own comments. It is **not an authority**:
+   Asciidoctor does not produce an ASG, so the mapping is *our reading* of how
+   the two correspond, and a disagreement sometimes means the mapping is wrong.
+   And it **cannot compare positions** — Asciidoctor's sourcemap records the
+   line a block starts on and nothing else, so locations are checked separately.
+
+   It earned its place immediately. Run against the TCK's own README, it found
+   that a style in the attribute list outranks the delimiter: `[source]` over
+   `....` is a listing rather than a literal, and `[source]` over bare lines is
+   a listing rather than a paragraph. Both were wrong here and are now fixed.
+
+   Known remaining disagreements, recorded rather than papered over:
+
+   | Construct | Ours | Asciidoctor |
+   |---|---|---|
+   | Content before the first section | paragraphs | wrapped in a `preamble` |
+   | `[quote]` on a paragraph | a quote holding lines | a quote holding a paragraph |
+   | `TIP:` and friends | paragraph | `admonition` |
+   | Tables | preserved, absent from the graph | `table` |
 
 A fourth, once a serializer exists: **round-trip testing needs no expected
 output at all.** Parse any real AsciiDoc document, write it back, and require

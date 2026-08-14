@@ -506,13 +506,46 @@ extension Parser {
             attributes.range = attributes.range.map { $0.union(parsed.range ?? $0) } ?? parsed.range
         }
 
+        /// A style in the attribute list outranks the delimiter, and outranks
+        /// having no delimiter at all: `[source]` over `....` is a listing, not
+        /// a literal, and `[source]` over bare lines is a listing, not a
+        /// paragraph. Found by comparing against Asciidoctor on a real
+        /// document — see tools/compare-with-asciidoctor.py.
+        static func kind(forStyle style: String) -> Block.Kind? {
+            switch style {
+            case "source", "listing": .listing
+            case "literal": .literal
+            case "quote", "verse": .quote
+            case "example": .example
+            case "sidebar": .sidebar
+            case "pass": .passthrough
+            case "open": .open
+            case "comment": .comment
+            default: nil
+            }
+        }
+
         func finish(
             kind: Block.Kind,
             range: SourceRange,
             blocks: [Block] = [],
             lines: [SourceLine] = []
         ) -> Block {
-            Block(
+            var kind = kind
+
+            // Only content blocks take a style; a section or a list is what it
+            // is regardless of what the attribute list says.
+            switch kind {
+            case .paragraph, .listing, .literal, .quote, .example, .sidebar,
+                .passthrough, .open:
+                if let style = attributes.style, let overridden = Self.kind(forStyle: style) {
+                    kind = overridden
+                }
+            default:
+                break
+            }
+
+            return Block(
                 kind: kind,
                 range: SourceRange(start: start ?? range.start, end: range.end),
                 title: title,
