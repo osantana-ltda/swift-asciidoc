@@ -58,6 +58,8 @@ func describe(_ kind: Block.Kind) -> String {
     switch kind {
     case .section(let level): "section \(level)"
     case .paragraph: "paragraph"
+    case .preamble: "preamble"
+    case .admonition(let variant): "admonition (\(variant))"
     case .listing: "listing"
     case .literal: "literal"
     case .quote: "quote"

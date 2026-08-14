@@ -78,13 +78,21 @@ def encode_block(block)
       'inlines' => [text_node(block.lines.join("\n"))].compact
     }
 
-  when :quote, :example, :sidebar, :open
+  when :admonition
+    {
+      'name' => 'admonition',
+      'type' => 'block',
+      'variant' => block.attributes['name'],
+      'inlines' => [text_node(block.lines.join("\n"))].compact
+    }
+
+  when :preamble, :quote, :example, :sidebar, :open
     {
       'name' => block.context.to_s,
       'type' => 'block',
-      'form' => 'delimited',
+      'form' => block.context == :preamble ? nil : 'delimited',
       'blocks' => block.blocks.map { |child| encode_block(child) }.compact
-    }
+    }.compact
 
   when :ulist, :olist
     {

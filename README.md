@@ -27,7 +27,7 @@ understand tables.
 ### Not yet implemented
 
 - Inline syntax of any kind.
-- Tables, description lists, admonitions, and list continuation (`+`).
+- Tables, description lists, and list continuation (`+`).
 - Nested lists: a deeper marker stays with the item that precedes it.
 - `include::`, `ifdef::` and the rest of the preprocessor.
 - Author and revision lines are captured verbatim, not split into fields.
@@ -122,14 +122,18 @@ fill the gap:
    `....` is a listing rather than a literal, and `[source]` over bare lines is
    a listing rather than a paragraph. Both were wrong here and are now fixed.
 
-   Known remaining disagreements, recorded rather than papered over:
+   It has since found and closed four more gaps: content between the header and
+   the first section becomes a `preamble` (only when the document has both a
+   header and a section — established by probing Asciidoctor, since the
+   specification does not say); `TIP:` and friends are admonitions, as is a
+   `[NOTE]`-styled block; a style that turns a paragraph into a compound block
+   nests the text as a child paragraph, so `[quote]` over a paragraph is a quote
+   *containing* a paragraph; and Markdown's `>` blockquote is a quote block,
+   which Asciidoctor accepts and the TCK has no case for.
 
-   | Construct | Ours | Asciidoctor |
-   |---|---|---|
-   | Content before the first section | paragraphs | wrapped in a `preamble` |
-   | `[quote]` on a paragraph | a quote holding lines | a quote holding a paragraph |
-   | `TIP:` and friends | paragraph | `admonition` |
-   | Tables | preserved, absent from the graph | `table` |
+   One known disagreement remains, recorded rather than papered over: tables are
+   preserved as unparsed blocks and stay out of the graph, where Asciidoctor
+   reports a `table` node.
 
 A fourth, once a serializer exists: **round-trip testing needs no expected
 output at all.** Parse any real AsciiDoc document, write it back, and require

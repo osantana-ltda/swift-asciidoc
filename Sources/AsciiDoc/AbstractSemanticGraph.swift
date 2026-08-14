@@ -70,6 +70,26 @@ public enum AbstractSemanticGraph {
             node["blocks"] = block.blocks.compactMap(encodeBlock)
             return node
 
+        case .preamble:
+            var node = named("preamble")
+            node["blocks"] = block.blocks.compactMap(encodeBlock)
+            node["location"] = location(block.range)
+            return node
+
+        case .admonition(let variant):
+            // The specification does not define this node, so the shape follows
+            // the one the graph uses elsewhere for a variant: `list` carries
+            // `variant`, and so does this.
+            var node = named("admonition")
+            node["variant"] = variant
+            if block.blocks.isEmpty {
+                node["inlines"] = [joinedText(of: block)].compactMap { $0 }
+            } else {
+                node["blocks"] = block.blocks.compactMap(encodeBlock)
+            }
+            node["location"] = location(block.range)
+            return node
+
         case .paragraph:
             var node = named("paragraph")
             node["inlines"] = [joinedText(of: block)].compactMap { $0 }

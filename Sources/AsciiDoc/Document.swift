@@ -93,6 +93,13 @@ public struct Block: Hashable, Sendable {
         /// `== Title`, at the given level. Level 0 is the document title.
         case section(level: Int)
         case paragraph
+        /// Content between the header and the first section. Only exists when
+        /// the document has both a header and a section; established by
+        /// probing Asciidoctor, since the specification does not say.
+        case preamble
+        /// `NOTE:`, `TIP:`, `IMPORTANT:`, `WARNING:` or `CAUTION:`, either as a
+        /// paragraph prefix or as a `[NOTE]` style.
+        case admonition(variant: String)
         /// `----`
         case listing
         /// `....`

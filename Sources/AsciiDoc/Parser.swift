@@ -15,7 +15,11 @@ public enum Parser {
     public static func parse(_ source: String) -> Document {
         var state = State(lines: LineReader.lines(of: source))
         let header = state.parseHeader()
-        let blocks = state.parseBlocks(untilSectionLevel: nil)
+        var blocks = state.parseBlocks(untilSectionLevel: nil)
+
+        if header != nil {
+            blocks = wrapPreamble(blocks)
+        }
 
         let start = header?.range.start ?? blocks.first?.range.start
         let end = blocks.last?.range.end ?? header?.range.end
@@ -32,6 +36,30 @@ public enum Parser {
 }
 
 extension Parser {
+    /// Content between the header and the first section becomes a preamble —
+    /// but only when there is a section for it to precede, and only when the
+    /// document has a header. A document with leading text and no section has
+    /// no preamble, and neither does one without a header.
+    fileprivate static func wrapPreamble(_ blocks: [Block]) -> [Block] {
+        guard let firstSection = blocks.firstIndex(where: { if case .section = $0.kind { true } else { false } }),
+            firstSection > 0
+        else {
+            return blocks
+        }
+
+        let leading = Array(blocks[..<firstSection])
+        let preamble = Block(
+            kind: .preamble,
+            range: SourceRange(
+                start: leading[0].range.start,
+                end: leading[leading.count - 1].range.end
+            ),
+            blocks: leading
+        )
+
+        return [preamble] + blocks[firstSection...]
+    }
+
     fileprivate struct State {
         let lines: [SourceLine]
         var index = 0
@@ -172,11 +200,26 @@ extension Parser {
                 )
             }
 
+            if Self.isMarkdownQuote(line) {
+                return parseMarkdownQuote(metadata: metadata)
+            }
+
             if ListMarker(line: line) != nil {
                 return parseList(metadata: metadata)
             }
 
             return parseParagraph(metadata: metadata)
+        }
+
+        /// `NOTE: text` and friends. The label is markup, so it is dropped from
+        /// the content the way Asciidoctor drops it.
+        static func admonitionVariant(_ line: SourceLine) -> String? {
+            let trimmed = line.trimmed
+            for label in ["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"]
+            where trimmed.hasPrefix(label + ": ") {
+                return label.lowercased()
+            }
+            return nil
         }
 
         private mutating func parseSection(level: Int, metadata: Metadata) -> Block {
@@ -262,6 +305,7 @@ extension Parser {
                 Self.sectionLevel(line) == nil,
                 Delimiter(line: line) == nil,
                 !Self.isLineComment(line),
+                !Self.isMarkdownQuote(line),
                 ListMarker(line: line) == nil,
                 !Self.isBlockAttributeLine(line)
             {
@@ -283,13 +327,72 @@ extension Parser {
                 )
             }
 
+            var kind = Block.Kind.paragraph
+            if let variant = Self.admonitionVariant(content[0]) {
+                kind = .admonition(variant: variant)
+                content[0] = Self.strippingLabel(content[0], length: variant.count + 2)
+            }
+
             return metadata.finish(
-                kind: .paragraph,
+                kind: kind,
                 range: SourceRange(
                     start: content[0].range.start,
                     end: content[content.count - 1].range.end
                 ),
                 lines: content
+            )
+        }
+
+        /// Drops a leading label from a line, keeping the rest located where it
+        /// actually is.
+        static func strippingLabel(_ line: SourceLine, length: Int) -> SourceLine {
+            let leading = line.text.prefix { $0 == " " || $0 == "\t" }.count
+            let drop = leading + length
+            let text = String(line.text.dropFirst(drop))
+            let startColumn = line.range.start.column + drop
+
+            return SourceLine(
+                text: text,
+                range: SourceRange(
+                    start: SourceLocation(
+                        offset: line.range.start.offset + drop,
+                        line: line.number,
+                        column: startColumn
+                    ),
+                    end: line.range.end
+                ),
+                number: line.number
+            )
+        }
+
+        /// AsciiDoc also accepts Markdown's `>` blockquote, which Asciidoctor
+        /// reads as a quote block. Found by comparing against it on a real
+        /// document — the TCK has no case for it.
+        static func isMarkdownQuote(_ line: SourceLine) -> Bool {
+            let trimmed = line.trimmed
+            return trimmed == ">" || trimmed.hasPrefix("> ")
+        }
+
+        private mutating func parseMarkdownQuote(metadata: Metadata) -> Block {
+            guard let first = current else {
+                return metadata.orphanBlock() ?? Block(kind: .quote, range: .empty)
+            }
+
+            var stripped: [SourceLine] = []
+            var last = first
+
+            while let line = current, Self.isMarkdownQuote(line) {
+                let marker = line.trimmed == ">" ? 1 : 2
+                stripped.append(Self.strippingLabel(line, length: marker))
+                last = line
+                advance()
+            }
+
+            var inner = State(lines: stripped)
+            return metadata.finish(
+                kind: .quote,
+                range: SourceRange(start: first.range.start, end: last.range.end),
+                blocks: inner.parseBlocks(untilSectionLevel: nil)
             )
         }
 
@@ -511,6 +614,13 @@ extension Parser {
         /// a literal, and `[source]` over bare lines is a listing, not a
         /// paragraph. Found by comparing against Asciidoctor on a real
         /// document — see tools/compare-with-asciidoctor.py.
+        static func isCompound(_ kind: Block.Kind) -> Bool {
+            switch kind {
+            case .quote, .example, .sidebar, .open: true
+            default: false
+            }
+        }
+
         static func kind(forStyle style: String) -> Block.Kind? {
             switch style {
             case "source", "listing": .listing
@@ -521,6 +631,9 @@ extension Parser {
             case "pass": .passthrough
             case "open": .open
             case "comment": .comment
+            case "NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION": .admonition(
+                variant: style.lowercased()
+            )
             default: nil
             }
         }
@@ -532,17 +645,38 @@ extension Parser {
             lines: [SourceLine] = []
         ) -> Block {
             var kind = kind
+            var blocks = blocks
+            var lines = lines
 
             // Only content blocks take a style; a section or a list is what it
             // is regardless of what the attribute list says.
             switch kind {
             case .paragraph, .listing, .literal, .quote, .example, .sidebar,
-                .passthrough, .open:
+                .passthrough, .open, .admonition:
                 if let style = attributes.style, let overridden = Self.kind(forStyle: style) {
                     kind = overridden
                 }
             default:
                 break
+            }
+
+            // A style that turns a paragraph into a compound block leaves the
+            // text as that block's child, not as its own lines: `[quote]` over a
+            // paragraph is a quote *containing* a paragraph.
+            if case .paragraph = kind {} else if !lines.isEmpty, blocks.isEmpty,
+                Self.isCompound(kind)
+            {
+                blocks = [
+                    Block(
+                        kind: .paragraph,
+                        range: SourceRange(
+                            start: lines[0].range.start,
+                            end: lines[lines.count - 1].range.end
+                        ),
+                        lines: lines
+                    )
+                ]
+                lines = []
             }
 
             return Block(
