@@ -12,10 +12,11 @@ being written for.
 **Block structure parses; inline syntax does not.**
 
 `Parser.parse(_:)` returns a document of nested blocks, each carrying its exact
-source range: document header with attribute entries, sections nested by level,
-paragraphs, delimited blocks (listing, literal, quote, example, sidebar,
-passthrough, open, comment), block titles and attribute lists including
-shorthand, line and block comments, and simple lists.
+source range: document header with attribute entries, preambles, sections
+nested by level, paragraphs, admonitions, delimited blocks (listing, literal,
+quote, example, sidebar, passthrough, open, comment), tables with rows and
+cells, block titles and attribute lists including shorthand, line and block
+comments, and simple lists.
 
 Inside a paragraph the text is still raw lines. Inline parsing — emphasis, links,
 cross-references, macros — is the next piece of work and the larger one.
@@ -27,7 +28,9 @@ understand tables.
 ### Not yet implemented
 
 - Inline syntax of any kind.
-- Tables, description lists, and list continuation (`+`).
+- Table cell specifiers (`2+|`, `a|`, alignments) and the csv/dsv table
+  flavours — a specifier stays as part of the cell's text.
+- Description lists and list continuation (`+`).
 - Nested lists: a deeper marker stays with the item that precedes it.
 - `include::`, `ifdef::` and the rest of the preprocessor.
 - Author and revision lines are captured verbatim, not split into fields.
@@ -131,9 +134,12 @@ fill the gap:
    *containing* a paragraph; and Markdown's `>` blockquote is a quote block,
    which Asciidoctor accepts and the TCK has no case for.
 
-   One known disagreement remains, recorded rather than papered over: tables are
-   preserved as unparsed blocks and stay out of the graph, where Asciidoctor
-   reports a `table` node.
+   Tables closed the last of those gaps: rows and cells parse with exact
+   ranges, with the rules probed rather than assumed — the column count comes
+   from `cols` or from the first line's cell count, cells pool across lines and
+   group into rows of that count, and the first row becomes the head on
+   `%header` or when a blank line follows it. **The whole comparison corpus now
+   agrees with Asciidoctor, 20 of 20 documents.**
 
 A fourth, once a serializer exists: **round-trip testing needs no expected
 output at all.** Parse any real AsciiDoc document, write it back, and require

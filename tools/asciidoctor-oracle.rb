@@ -52,6 +52,20 @@ def text_node(value)
   { 'name' => 'text', 'type' => 'string', 'value' => value }
 end
 
+def encode_row(row)
+  {
+    'name' => 'row',
+    'type' => 'block',
+    'cells' => row.map do |cell|
+      {
+        'name' => 'cell',
+        'type' => 'block',
+        'inlines' => [text_node(raw(cell, :@text) || cell.text)].compact
+      }
+    end
+  }
+end
+
 def encode_block(block)
   case block.context
   when :section
@@ -77,6 +91,14 @@ def encode_block(block)
       'form' => 'delimited',
       'inlines' => [text_node(block.lines.join("\n"))].compact
     }
+
+  when :table
+    head = block.rows.head.map { |row| encode_row(row) }
+    body = (block.rows.body + block.rows.foot).map { |row| encode_row(row) }
+    node = { 'name' => 'table', 'type' => 'block' }
+    node['head'] = head unless head.empty?
+    node['body'] = body unless body.empty?
+    node
 
   when :admonition
     {

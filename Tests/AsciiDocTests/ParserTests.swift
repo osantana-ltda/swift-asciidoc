@@ -306,9 +306,9 @@ import Testing
     #expect(document.blocks[0].kind == .orderedList)
 }
 
-// MARK: - Preservation
+// MARK: - Tables
 
-@Test func tablesArePreservedRatherThanGuessedAt() {
+@Test func tablesGroupCellsByTheFirstLine() {
     let document = Parser.parse(
         """
         |===
@@ -318,8 +318,109 @@ import Testing
         """
     )
 
-    #expect(document.blocks[0].kind == .unparsed)
-    #expect(document.blocks[0].lines.count == 2)
+    let table = document.blocks[0]
+    #expect(table.kind == .table)
+    #expect(table.blocks.count == 2)
+    #expect(table.blocks[0].kind == .tableRow(header: false))
+    #expect(table.blocks[0].blocks.map(\.text) == ["a", "b"])
+    #expect(table.blocks[1].blocks.map(\.text) == ["c", "d"])
+}
+
+@Test func aBlankLineAfterTheFirstRowMakesItTheHead() {
+    let document = Parser.parse(
+        """
+        |===
+        | h1 | h2
+
+        | a | b
+        |===
+        """
+    )
+
+    let table = document.blocks[0]
+    #expect(table.blocks[0].kind == .tableRow(header: true))
+    #expect(table.blocks[0].blocks.map(\.text) == ["h1", "h2"])
+    #expect(table.blocks[1].kind == .tableRow(header: false))
+}
+
+@Test func theHeaderOptionMakesTheFirstRowTheHead() {
+    let document = Parser.parse(
+        """
+        [%header]
+        |===
+        | h1 | h2
+        | a | b
+        |===
+        """
+    )
+
+    #expect(document.blocks[0].blocks[0].kind == .tableRow(header: true))
+}
+
+@Test func theColsAttributeSetsTheColumnCount() {
+    let document = Parser.parse(
+        """
+        [cols="1,2,3"]
+        |===
+        | a | b | c | d | e | f
+        |===
+        """
+    )
+
+    let table = document.blocks[0]
+    #expect(table.blocks.count == 2)
+    #expect(table.blocks[0].blocks.count == 3)
+    #expect(table.blocks[1].blocks.map(\.text) == ["d", "e", "f"])
+}
+
+@Test func oneCellPerLineIsASingleColumn() {
+    let document = Parser.parse(
+        """
+        |===
+        | a
+        | b
+        | c
+        |===
+        """
+    )
+
+    let table = document.blocks[0]
+    #expect(table.blocks.count == 3)
+    #expect(table.blocks.allSatisfy { $0.blocks.count == 1 })
+}
+
+@Test func escapedPipesStayInsideTheirCell() {
+    let document = Parser.parse(
+        """
+        |===
+        | a \\| b | c
+        |===
+        """
+    )
+
+    let row = document.blocks[0].blocks[0]
+    #expect(row.blocks.map(\.text) == ["a | b", "c"])
+}
+
+@Test func tableCellsCarryExactRanges() {
+    let source = """
+        |===
+        | alpha | beta
+        |===
+        """
+    let document = Parser.parse(source)
+    let cells = document.blocks[0].blocks[0].blocks
+    let text = source as NSString
+
+    for cell in cells {
+        let extracted = text.substring(
+            with: NSRange(
+                location: cell.range.start.offset,
+                length: cell.range.end.offset - cell.range.start.offset
+            )
+        )
+        #expect(extracted == cell.text)
+    }
 }
 
 @Test func everyBlockIsCoveredByItsRange() {

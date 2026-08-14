@@ -114,6 +114,11 @@ public struct Block: Hashable, Sendable {
         case passthrough
         /// `--`
         case open
+        /// `|===`
+        case table
+        /// A row of cells; `header` marks rows in the table head.
+        case tableRow(header: Bool)
+        case tableCell
         case unorderedList
         case orderedList
         case listItem
@@ -168,6 +173,8 @@ public struct BlockAttributes: Hashable, Sendable {
     public var id: String?
     /// From `[.role]` or a `role=` named attribute.
     public var roles: [String]
+    /// From `[%option]` or an `options=`/`opts=` named attribute.
+    public var options: [String]
     /// The first positional attribute, which names the block's style —
     /// `source` in `[source,swift]`.
     public var style: String?
@@ -179,6 +186,7 @@ public struct BlockAttributes: Hashable, Sendable {
     public init(
         id: String? = nil,
         roles: [String] = [],
+        options: [String] = [],
         style: String? = nil,
         positional: [String] = [],
         named: [String: String] = [:],
@@ -186,6 +194,7 @@ public struct BlockAttributes: Hashable, Sendable {
     ) {
         self.id = id
         self.roles = roles
+        self.options = options
         self.style = style
         self.positional = positional
         self.named = named
@@ -193,6 +202,7 @@ public struct BlockAttributes: Hashable, Sendable {
     }
 
     public var isEmpty: Bool {
-        id == nil && roles.isEmpty && style == nil && positional.isEmpty && named.isEmpty
+        id == nil && roles.isEmpty && options.isEmpty && style == nil && positional.isEmpty
+            && named.isEmpty
     }
 }

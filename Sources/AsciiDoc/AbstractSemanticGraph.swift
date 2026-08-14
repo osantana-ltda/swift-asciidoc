@@ -112,6 +112,28 @@ public enum AbstractSemanticGraph {
             node["location"] = location(block.range)
             return node
 
+        case .table:
+            // The specification has not reached tables, so the shape mirrors
+            // Asciidoctor's model the way the oracle reads it: head rows and
+            // body rows, each a run of cells.
+            var node = named("table")
+            let head = block.blocks.filter { $0.kind == .tableRow(header: true) }
+            let body = block.blocks.filter { $0.kind == .tableRow(header: false) }
+            if !head.isEmpty {
+                node["head"] = head.compactMap(encodeRow)
+            }
+            if !body.isEmpty {
+                node["body"] = body.compactMap(encodeRow)
+            }
+            node["location"] = location(block.range)
+            return node
+
+        case .tableRow:
+            return encodeRow(block)
+
+        case .tableCell:
+            return encodeCell(block)
+
         case .unorderedList, .orderedList:
             var node = named("list")
             node["variant"] = block.kind == .orderedList ? "ordered" : "unordered"
@@ -130,6 +152,20 @@ public enum AbstractSemanticGraph {
             // unparsed is deliberately not guessed at.
             return nil
         }
+    }
+
+    private static func encodeRow(_ block: Block) -> [String: Any]? {
+        var node = named("row")
+        node["cells"] = block.blocks.compactMap(encodeCell)
+        node["location"] = location(block.range)
+        return node
+    }
+
+    private static func encodeCell(_ block: Block) -> [String: Any]? {
+        var node = named("cell")
+        node["inlines"] = [joinedText(of: block)].compactMap { $0 }
+        node["location"] = location(block.range)
+        return node
     }
 
     private static func encodeListItem(_ block: Block, marker: String) -> [String: Any]? {

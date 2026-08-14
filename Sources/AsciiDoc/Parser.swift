@@ -266,6 +266,14 @@ extension Parser {
                 end: closing?.range.end ?? content.last?.range.end ?? opening.range.end
             )
 
+            if delimiter.kind == .table {
+                return metadata.finish(
+                    kind: .table,
+                    range: range,
+                    blocks: TableParser.rows(of: content, attributes: metadata.attributes)
+                )
+            }
+
             // A compound block holds blocks; a verbatim one holds its lines
             // exactly as written, which is the whole point of it.
             if delimiter.isCompound {
@@ -603,6 +611,7 @@ extension Parser {
         private mutating func apply(_ parsed: BlockAttributes) {
             attributes.id = parsed.id ?? attributes.id
             attributes.roles += parsed.roles
+            attributes.options += parsed.options
             attributes.style = parsed.style ?? attributes.style
             attributes.positional += parsed.positional
             attributes.named.merge(parsed.named) { _, new in new }
@@ -725,11 +734,9 @@ extension Parser {
             guard let first = trimmed.first, trimmed.count >= 4,
                 trimmed.allSatisfy({ $0 == first })
             else {
-                // Tables and anything else delimited that this parser does not
-                // model are recognised only well enough to be preserved whole.
                 if trimmed.hasPrefix("|===") {
                     text = "|==="
-                    kind = .unparsed
+                    kind = .table
                     isCompound = false
                     return
                 }
@@ -874,28 +881,32 @@ enum AttributeListParser {
                     attributes.roles += value.split(separator: " ").map(String.init)
                 } else if name == "id" {
                     attributes.id = value
+                } else if name == "options" || name == "opts" {
+                    attributes.options += value.split(separator: ",").map(String.init)
                 } else {
                     attributes.named[name] = value
                 }
                 continue
             }
 
-            // Shorthand: `style#id.role1.role2`
+            // Shorthand: `style#id.role1.role2%option`
             var shorthand = trimmed[...]
             var positional = ""
-            while let character = shorthand.first, character != "#", character != "." {
+            while let character = shorthand.first, character != "#", character != ".",
+                character != "%"
+            {
                 positional.append(character)
                 shorthand = shorthand.dropFirst()
             }
 
             while let marker = shorthand.first {
                 shorthand = shorthand.dropFirst()
-                let value = String(shorthand.prefix { $0 != "#" && $0 != "." })
+                let value = String(shorthand.prefix { $0 != "#" && $0 != "." && $0 != "%" })
                 shorthand = shorthand.dropFirst(value.count)
-                if marker == "#" {
-                    attributes.id = value
-                } else {
-                    attributes.roles.append(value)
+                switch marker {
+                case "#": attributes.id = value
+                case "%": attributes.options.append(value)
+                default: attributes.roles.append(value)
                 }
             }
 
