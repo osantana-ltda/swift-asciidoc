@@ -29,12 +29,20 @@ guard CommandLine.arguments.contains("--tree") else {
     }
 
     if request["type"] as? String == "inline" {
-        // Inline parsing is not implemented. Failing is the honest answer;
-        // emitting an empty graph would report a pass that is not one.
-        FileHandle.standardError.write(
-            Data("asciidoc-tck-adapter: inline parsing is not implemented\n".utf8)
-        )
-        exit(1)
+        let inlines = InlineParser.parse(LineReader.lines(of: contents))
+            .map(AbstractSemanticGraph.encodeInline)
+        guard
+            let encoded = try? JSONSerialization.data(
+                withJSONObject: inlines,
+                options: [.sortedKeys]
+            )
+        else {
+            FileHandle.standardError.write(Data("asciidoc-tck-adapter: encoding failed\n".utf8))
+            exit(1)
+        }
+
+        FileHandle.standardOutput.write(encoded)
+        exit(0)
     }
 
     let graph = AbstractSemanticGraph.encode(Parser.parse(contents), source: contents)

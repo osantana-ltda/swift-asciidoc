@@ -9,7 +9,7 @@ being written for.
 
 ## Status
 
-**Block structure parses; inline syntax does not.**
+**Block structure parses, and the core inline spans do.**
 
 `Parser.parse(_:)` returns a document of nested blocks, each carrying its exact
 source range: document header with attribute entries, preambles, sections
@@ -18,8 +18,12 @@ quote, example, sidebar, passthrough, open, comment), tables with rows and
 cells, block titles and attribute lists including shorthand, line and block
 comments, and simple lists.
 
-Inside a paragraph the text is still raw lines. Inline parsing — emphasis, links,
-cross-references, macros — is the next piece of work and the larger one.
+Inside paragraphs, admonitions, list items and table cells,
+`InlineParser.parse(_:)` produces the inline tree: strong, emphasis, code, mark,
+superscript and subscript, in both constrained and unconstrained forms, nested,
+with escapes, across line breaks. Every node extracts from the source to exactly
+the text it claims to cover — the property the editor's decoration consumes.
+Blocks keep their raw lines; the inline tree is derived on demand.
 
 Anything not modelled is kept as an `.unparsed` block rather than dropped or
 guessed at, so a table survives a round trip through a parser that does not yet
@@ -27,7 +31,9 @@ understand tables.
 
 ### Not yet implemented
 
-- Inline syntax of any kind.
+- Inline macros (`link:`, `xref:`, `image:`, footnotes), attribute references
+  (`{name}`) and inline anchors — their syntax passes through as text.
+- Inline parsing of section and block titles.
 - Table cell specifiers (`2+|`, `a|`, alignments) and the csv/dsv table
   flavours — a specifier stays as part of the cell's text.
 - Description lists and list continuation (`+`).
@@ -84,10 +90,7 @@ Point the harness at the adapter built here:
 asciidoc-tck cli -c /path/to/.build/release/asciidoc-tck-adapter
 ```
 
-**Current result: 11 of 13 tests pass.** All eleven block cases pass. The two
-failures are the inline cases, which the adapter reports as unimplemented rather
-than answering with an empty graph — a false pass would make the report
-worthless.
+**Current result: all 13 tests pass** — every block case and both inline cases.
 
 ### The TCK is small, so most coverage has to come from elsewhere
 

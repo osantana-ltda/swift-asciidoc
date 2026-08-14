@@ -26,8 +26,11 @@ ROOT = HERE.parent
 ADAPTER = ROOT / ".build" / "release" / "asciidoc-tck-adapter"
 ORACLE = HERE / "asciidoctor-oracle.rb"
 
-# Keys the oracle cannot fill in, or that carry no structure.
-IGNORED = {"location", "delimiter", "marker", "attributes"}
+# Keys the oracle cannot fill in, or that carry no structure. `inlines` and
+# `principal` joined the list when inline parsing arrived: ours is a parsed
+# tree, Asciidoctor's raw text still holds the delimiters, and the two cannot
+# be compared textually. Inline correctness is the TCK's job.
+IGNORED = {"location", "delimiter", "marker", "attributes", "inlines", "principal"}
 
 
 def strip(node):

@@ -83,7 +83,7 @@ public enum AbstractSemanticGraph {
             var node = named("admonition")
             node["variant"] = variant
             if block.blocks.isEmpty {
-                node["inlines"] = [joinedText(of: block)].compactMap { $0 }
+                node["inlines"] = inlineNodes(of: block.lines)
             } else {
                 node["blocks"] = block.blocks.compactMap(encodeBlock)
             }
@@ -92,7 +92,7 @@ public enum AbstractSemanticGraph {
 
         case .paragraph:
             var node = named("paragraph")
-            node["inlines"] = [joinedText(of: block)].compactMap { $0 }
+            node["inlines"] = inlineNodes(of: block.lines)
             node["location"] = location(block.range)
             return node
 
@@ -163,7 +163,7 @@ public enum AbstractSemanticGraph {
 
     private static func encodeCell(_ block: Block) -> [String: Any]? {
         var node = named("cell")
-        node["inlines"] = [joinedText(of: block)].compactMap { $0 }
+        node["inlines"] = inlineNodes(of: block.lines)
         node["location"] = location(block.range)
         return node
     }
@@ -172,19 +172,65 @@ public enum AbstractSemanticGraph {
         var node = named("listItem")
         node["marker"] = marker
 
-        if let principal = joinedText(of: block, droppingMarker: marker.count + 1) {
-            node["principal"] = [principal]
+        var lines = block.lines
+        if !lines.isEmpty {
+            lines[0] = stripMarker(lines[0], length: marker.count + 1)
+        }
+        let principal = inlineNodes(of: lines)
+        if !principal.isEmpty {
+            node["principal"] = principal
         }
 
         node["location"] = location(block.range)
         return node
     }
 
+    /// Drops the list marker and the space after it, keeping the rest located
+    /// where it actually is. Marker characters are ASCII, so character counts
+    /// and UTF-16 widths agree.
+    private static func stripMarker(_ line: SourceLine, length: Int) -> SourceLine {
+        let leading = line.text.prefix { $0 == " " || $0 == "\t" }.count
+        let drop = leading + length
+        let start = SourceLocation(
+            offset: line.range.start.offset + drop,
+            line: line.number,
+            column: line.range.start.column + drop
+        )
+
+        return SourceLine(
+            text: String(line.text.dropFirst(drop)),
+            range: SourceRange(start: start, end: line.range.end),
+            number: line.number
+        )
+    }
+
     // MARK: - Inlines
 
-    /// A block's content as a single text node. Inline syntax is not parsed
-    /// yet, so a paragraph is one unbroken run of text — which is right for
-    /// content with no markup in it and wrong for anything else.
+    private static func inlineNodes(of lines: [SourceLine]) -> [[String: Any]] {
+        InlineParser.parse(lines).map(encodeInline)
+    }
+
+    /// Encodes one inline node. Public because the TCK adapter's inline mode
+    /// emits these at the top level.
+    public static func encodeInline(_ inline: Inline) -> [String: Any] {
+        switch inline {
+        case .text(let value, let range):
+            return text(value, range: range)
+
+        case .span(let span):
+            return [
+                "name": "span",
+                "type": "inline",
+                "variant": span.variant.rawValue,
+                "form": span.form.rawValue,
+                "inlines": span.inlines.map(encodeInline),
+                "location": location(span.range),
+            ]
+        }
+    }
+
+    /// A verbatim block's content as a single text node — listings and
+    /// literals take no inline markup, which is their point.
     private static func joinedText(of block: Block, droppingMarker markerLength: Int = 0) -> [String: Any]? {
         guard let first = block.lines.first, let last = block.lines.last else {
             return nil
