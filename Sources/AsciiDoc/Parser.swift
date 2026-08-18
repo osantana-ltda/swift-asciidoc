@@ -13,7 +13,8 @@
 /// round trip even where this parser does not yet understand it.
 public enum Parser {
     public static func parse(_ source: String) -> Document {
-        var state = State(lines: LineReader.lines(of: source))
+        let lines = LineReader.lines(of: source)
+        var state = State(lines: lines)
         let header = state.parseHeader()
         var blocks = state.parseBlocks(untilSectionLevel: nil)
 
@@ -30,7 +31,11 @@ public enum Parser {
             range: SourceRange(
                 start: start ?? SourceLocation(offset: 0, line: 1, column: 1),
                 end: end ?? SourceLocation(offset: 0, line: 1, column: 1)
-            )
+            ),
+            // Checked in UTF-16, because `hasSuffix("\n")` is false for a CRLF
+            // document — Swift reads the final `\r\n` as one grapheme.
+            endsInNewline: source.utf16.last == 0x0A,
+            sourceLineCount: lines.count
         )
     }
 }
@@ -93,13 +98,16 @@ extension Parser {
             }
 
             advance()
+            var headerLines = [first]
             var authorLine: String?
             if let next = current, !next.isBlank, !Self.isAttributeEntry(next) {
                 authorLine = String(next.trimmed)
+                headerLines.append(next)
                 advance()
             }
 
-            let attributes = parseHeaderAttributes()
+            let (attributes, attributeLines) = parseHeaderAttributes()
+            headerLines += attributeLines
             let end = attributes.last?.range.end ?? first.range.end
 
             return DocumentHeader(
@@ -107,7 +115,8 @@ extension Parser {
                 titleRange: first.range,
                 authorLine: authorLine,
                 attributes: attributes,
-                range: SourceRange(start: first.range.start, end: end)
+                range: SourceRange(start: first.range.start, end: end),
+                lines: headerLines
             )
         }
 
@@ -117,7 +126,7 @@ extension Parser {
                 return nil
             }
 
-            let attributes = parseHeaderAttributes()
+            let (attributes, attributeLines) = parseHeaderAttributes()
             guard let last = attributes.last else {
                 return nil
             }
@@ -127,20 +136,23 @@ extension Parser {
                 titleRange: nil,
                 authorLine: nil,
                 attributes: attributes,
-                range: SourceRange(start: first.range.start, end: last.range.end)
+                range: SourceRange(start: first.range.start, end: last.range.end),
+                lines: attributeLines
             )
         }
 
-        private mutating func parseHeaderAttributes() -> [AttributeEntry] {
+        private mutating func parseHeaderAttributes() -> ([AttributeEntry], [SourceLine]) {
             var entries: [AttributeEntry] = []
+            var lines: [SourceLine] = []
             while let line = current, !line.isBlank {
                 guard let entry = Self.attributeEntry(line) else {
                     break
                 }
                 entries.append(entry)
+                lines.append(line)
                 advance()
             }
-            return entries
+            return (entries, lines)
         }
 
         // MARK: - Blocks
@@ -236,7 +248,8 @@ extension Parser {
             var block = metadata.finish(
                 kind: .section(level: level),
                 range: SourceRange(start: line.range.start, end: end),
-                blocks: children
+                blocks: children,
+                opening: line
             )
             block.title = title
             return block
@@ -270,7 +283,10 @@ extension Parser {
                 return metadata.finish(
                     kind: .table,
                     range: range,
-                    blocks: TableParser.rows(of: content, attributes: metadata.attributes)
+                    blocks: TableParser.rows(of: content, attributes: metadata.attributes),
+                    lines: content,
+                    opening: opening,
+                    closing: closing
                 )
             }
 
@@ -281,11 +297,19 @@ extension Parser {
                 return metadata.finish(
                     kind: delimiter.kind,
                     range: range,
-                    blocks: inner.parseBlocks(untilSectionLevel: nil)
+                    blocks: inner.parseBlocks(untilSectionLevel: nil),
+                    opening: opening,
+                    closing: closing
                 )
             }
 
-            return metadata.finish(kind: delimiter.kind, range: range, lines: content)
+            return metadata.finish(
+                kind: delimiter.kind,
+                range: range,
+                lines: content,
+                opening: opening,
+                closing: closing
+            )
         }
 
         private mutating func parseLineComments(metadata: Metadata) -> Block {
@@ -336,8 +360,10 @@ extension Parser {
             }
 
             var kind = Block.Kind.paragraph
+            var labelledLine: SourceLine?
             if let variant = Self.admonitionVariant(content[0]) {
                 kind = .admonition(variant: variant)
+                labelledLine = content[0]
                 content[0] = Self.strippingLabel(content[0], length: variant.count + 2)
             }
 
@@ -347,7 +373,8 @@ extension Parser {
                     start: content[0].range.start,
                     end: content[content.count - 1].range.end
                 ),
-                lines: content
+                lines: content,
+                opening: labelledLine
             )
         }
 
@@ -387,11 +414,13 @@ extension Parser {
             }
 
             var stripped: [SourceLine] = []
+            var originals: [SourceLine] = []
             var last = first
 
             while let line = current, Self.isMarkdownQuote(line) {
                 let marker = line.trimmed == ">" ? 1 : 2
                 stripped.append(Self.strippingLabel(line, length: marker))
+                originals.append(line)
                 last = line
                 advance()
             }
@@ -400,7 +429,8 @@ extension Parser {
             return metadata.finish(
                 kind: .quote,
                 range: SourceRange(start: first.range.start, end: last.range.end),
-                blocks: inner.parseBlocks(untilSectionLevel: nil)
+                blocks: inner.parseBlocks(untilSectionLevel: nil),
+                lines: originals
             )
         }
 
@@ -571,6 +601,8 @@ extension Parser {
         var title: Title?
         var attributes = BlockAttributes()
         var start: SourceLocation?
+        /// The metadata lines exactly as written, for the serializer.
+        var rawLines: [SourceLine] = []
 
         mutating func collect(from state: inout Parser.State) {
             while true {
@@ -584,6 +616,7 @@ extension Parser {
                 if Parser.State.isBlockAttributeLine(line) {
                     apply(AttributeListParser.parse(String(trimmed), range: line.range))
                     start = start ?? line.range.start
+                    rawLines.append(line)
                     state.advance()
                     continue
                 }
@@ -595,6 +628,7 @@ extension Parser {
                 {
                     title = Metadata.blockTitle(of: line)
                     start = start ?? line.range.start
+                    rawLines.append(line)
                     state.advance()
                     continue
                 }
@@ -651,7 +685,9 @@ extension Parser {
             kind: Block.Kind,
             range: SourceRange,
             blocks: [Block] = [],
-            lines: [SourceLine] = []
+            lines: [SourceLine] = [],
+            opening: SourceLine? = nil,
+            closing: SourceLine? = nil
         ) -> Block {
             var kind = kind
             var blocks = blocks
@@ -694,7 +730,10 @@ extension Parser {
                 title: title,
                 attributes: attributes,
                 blocks: blocks,
-                lines: lines
+                lines: lines,
+                prelude: rawLines,
+                opening: opening,
+                closing: closing
             )
         }
 
@@ -707,7 +746,8 @@ extension Parser {
                 kind: .unparsed,
                 range: SourceRange(start: start, end: attributes.range?.end ?? start),
                 title: title,
-                attributes: attributes
+                attributes: attributes,
+                prelude: rawLines
             )
         }
     }

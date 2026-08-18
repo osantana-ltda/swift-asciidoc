@@ -21,11 +21,25 @@ public struct Document: Hashable, Sendable {
     /// Top-level blocks, in source order. Sections nest their own content.
     public var blocks: [Block]
     public var range: SourceRange
+    /// Whether the source ended with a newline — the serializer must reproduce
+    /// either form exactly.
+    public var endsInNewline: Bool
+    /// How many lines the source had, so trailing blank lines survive the
+    /// round trip; zero for documents built programmatically.
+    public var sourceLineCount: Int
 
-    public init(header: DocumentHeader?, blocks: [Block], range: SourceRange) {
+    public init(
+        header: DocumentHeader?,
+        blocks: [Block],
+        range: SourceRange,
+        endsInNewline: Bool = true,
+        sourceLineCount: Int = 0
+    ) {
         self.header = header
         self.blocks = blocks
         self.range = range
+        self.endsInNewline = endsInNewline
+        self.sourceLineCount = sourceLineCount
     }
 
     /// Document attributes declared in the header, by name.
@@ -51,19 +65,24 @@ public struct DocumentHeader: Hashable, Sendable {
     public var authorLine: String?
     public var attributes: [AttributeEntry]
     public var range: SourceRange
+    /// Every header line exactly as written, in order — what the serializer
+    /// emits, so spacing and entry order survive the round trip.
+    public var lines: [SourceLine]
 
     public init(
         title: Title?,
         titleRange: SourceRange?,
         authorLine: String?,
         attributes: [AttributeEntry],
-        range: SourceRange
+        range: SourceRange,
+        lines: [SourceLine] = []
     ) {
         self.title = title
         self.titleRange = titleRange
         self.authorLine = authorLine
         self.attributes = attributes
         self.range = range
+        self.lines = lines
     }
 }
 
@@ -141,8 +160,20 @@ public struct Block: Hashable, Sendable {
     /// Nested blocks, for sections, lists and compound delimited blocks.
     public var blocks: [Block]
     /// Content lines, for leaf blocks. Inline structure is not parsed yet, so
-    /// these are the raw lines.
+    /// these are the raw lines. Compound blocks that were recognised from
+    /// marker syntax — tables, Markdown quotes — also keep their raw content
+    /// here as verbatim backing for the serializer.
     public var lines: [SourceLine]
+    /// Metadata lines exactly as written — anchors, attribute lists, the
+    /// `.Title` line — in source order.
+    public var prelude: [SourceLine]
+    /// The line that opened this block, verbatim: a section's heading line, a
+    /// delimited block's opening delimiter, or a prefix admonition's original
+    /// labelled first line.
+    public var opening: SourceLine?
+    /// The closing delimiter line, verbatim; nil for unterminated blocks,
+    /// which stay unterminated on the way back out.
+    public var closing: SourceLine?
 
     public init(
         kind: Kind,
@@ -150,7 +181,10 @@ public struct Block: Hashable, Sendable {
         title: Title? = nil,
         attributes: BlockAttributes = BlockAttributes(),
         blocks: [Block] = [],
-        lines: [SourceLine] = []
+        lines: [SourceLine] = [],
+        prelude: [SourceLine] = [],
+        opening: SourceLine? = nil,
+        closing: SourceLine? = nil
     ) {
         self.kind = kind
         self.range = range
@@ -158,6 +192,9 @@ public struct Block: Hashable, Sendable {
         self.attributes = attributes
         self.blocks = blocks
         self.lines = lines
+        self.prelude = prelude
+        self.opening = opening
+        self.closing = closing
     }
 
     /// The block's text content, joined by newlines. Convenience for leaf

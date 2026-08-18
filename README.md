@@ -9,7 +9,33 @@ being written for.
 
 ## Status
 
-**Block structure parses, and the core inline spans do.**
+**Parses, and serializes back — byte for byte.**
+
+`Serializer.serialize(_:)` writes a document out as AsciiDoc again, with two
+guarantees in order of precedence. A parsed document round-trips to its source
+**byte-identically**: the parser retains every line it consumed — metadata
+lines, delimiters, header lines, raw table and quote content — and the
+serializer emits that backing at its original line numbers, reconstructing
+blank lines from the gaps. A document built programmatically serializes to a
+**canonical form**: single blank lines between blocks, standard delimiters,
+attribute lists in fixed order with named attributes sorted — the same tree
+always yields the same bytes, which is what keeps diffs quiet.
+
+Two documented normalizations, both invisible to AsciiDoc semantics:
+whitespace-only blank lines between blocks come back empty, and CRLF comes
+back as LF.
+
+Round-trip testing needs no expected output, so any corpus on disk verifies it:
+
+```bash
+swift build -c release
+for f in corpus/**/*.adoc; do
+  .build/release/asciidoc-tck-adapter --roundtrip < "$f" | cmp - "$f"
+done
+```
+
+The TCK repository's own documents — 29 files, including its README with every
+construct in it — round-trip byte-identically.
 
 `Parser.parse(_:)` returns a document of nested blocks, each carrying its exact
 source range: document header with attribute entries, preambles, sections
@@ -152,9 +178,10 @@ fill the gap:
    `%header` or when a blank line follows it. **The whole comparison corpus now
    agrees with Asciidoctor, 20 of 20 documents.**
 
-A fourth, once a serializer exists: **round-trip testing needs no expected
-output at all.** Parse any real AsciiDoc document, write it back, and require
-the bytes to match. Every `.adoc` file in the world becomes a test case.
+4. **Round-trip testing**, which needs no expected output at all: parse any
+   real AsciiDoc document, write it back, and require the bytes to match. Now
+   that the serializer exists, every `.adoc` file in the world is a test case —
+   `asciidoc-tck-adapter --roundtrip` makes it a one-line shell check.
 
 ## Repository
 

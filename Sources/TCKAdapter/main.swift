@@ -18,6 +18,16 @@ import Foundation
 
 let input = FileHandle.standardInput.readDataToEndOfFile()
 
+// Round-trip mode: AsciiDoc on stdin, parse → serialize → stdout. With it,
+// any corpus on disk verifies the round trip:
+//
+//     diff <(asciidoc-tck-adapter --roundtrip < doc.adoc) doc.adoc
+if CommandLine.arguments.contains("--roundtrip") {
+    let source = String(decoding: input, as: UTF8.self)
+    FileHandle.standardOutput.write(Data(Serializer.serialize(Parser.parse(source)).utf8))
+    exit(0)
+}
+
 guard CommandLine.arguments.contains("--tree") else {
     // TCK mode: a JSON request in, an Abstract Semantic Graph out.
     guard

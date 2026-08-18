@@ -44,41 +44,56 @@ public enum LineReader {
     /// A document ending in a newline does not produce a trailing empty line;
     /// one that does not end in a newline still yields its last line. Both
     /// matter for round-tripping.
+    ///
+    /// The walk is over unicode scalars, not characters: Swift treats `\r\n` as
+    /// a single grapheme, so splitting on the `"\n"` character would not split
+    /// CRLF documents at all. The carriage return is normalised away; ranges
+    /// cover the text without it.
     public static func lines(of source: String) -> [SourceLine] {
-        var lines: [SourceLine] = []
+        var result: [SourceLine] = []
+        var text = ""
+        var lineStart = 0
         var offset = 0
         var number = 1
 
-        let pieces = source.split(separator: "\n", omittingEmptySubsequences: false)
-        for (index, piece) in pieces.enumerated() {
-            let isLast = index == pieces.count - 1
-            if isLast && piece.isEmpty && !pieces.isEmpty && source.hasSuffix("\n") {
-                break
-            }
-
-            // `\r\n` is normalised away here so the rest of the parser never has
-            // to think about it; the carriage return stays inside the range.
-            var text = String(piece)
+        func close() {
             if text.hasSuffix("\r") {
                 text.removeLast()
             }
-
-            let length = piece.utf16.count
-            lines.append(
+            let length = text.utf16.count
+            result.append(
                 SourceLine(
                     text: text,
                     range: SourceRange(
-                        start: SourceLocation(offset: offset, line: number, column: 1),
-                        end: SourceLocation(offset: offset + length, line: number, column: length + 1)
+                        start: SourceLocation(offset: lineStart, line: number, column: 1),
+                        end: SourceLocation(
+                            offset: lineStart + length,
+                            line: number,
+                            column: length + 1
+                        )
                     ),
                     number: number
                 )
             )
-
-            offset += length + 1
+            text = ""
             number += 1
         }
 
-        return lines
+        for scalar in source.unicodeScalars {
+            if scalar == "\n" {
+                close()
+                offset += 1
+                lineStart = offset
+            } else {
+                text.unicodeScalars.append(scalar)
+                offset += UTF16.width(scalar)
+            }
+        }
+
+        if offset > lineStart {
+            close()
+        }
+
+        return result
     }
 }
