@@ -21,9 +21,15 @@ comments, and simple lists.
 Inside paragraphs, admonitions, list items and table cells,
 `InlineParser.parse(_:)` produces the inline tree: strong, emphasis, code, mark,
 superscript and subscript, in both constrained and unconstrained forms, nested,
-with escapes, across line breaks. Every node extracts from the source to exactly
-the text it claims to cover — the property the editor's decoration consumes.
-Blocks keep their raw lines; the inline tree is derived on demand.
+with escapes, across line breaks — plus the inline macros. `name:target[attrs]`
+parses for the known names (`link`, `mailto`, `xref`, `image`, `icon`, `kbd`,
+`btn`, `menu`, `footnote`, `pass`, `stem`, `latexmath`, `asciimath`), the way
+Asciidoctor recognises only registered macros — an unknown name stays text.
+Bare URLs become `link` macros with trailing punctuation left outside, and
+`<<target,text>>` normalises to an `xref` macro. Every node extracts from the
+source to exactly the text it claims to cover — the property the editor's
+decoration consumes. Blocks keep their raw lines; the inline tree is derived on
+demand.
 
 Anything not modelled is kept as an `.unparsed` block rather than dropped or
 guessed at, so a table survives a round trip through a parser that does not yet
@@ -31,8 +37,10 @@ understand tables.
 
 ### Not yet implemented
 
-- Inline macros (`link:`, `xref:`, `image:`, footnotes), attribute references
-  (`{name}`) and inline anchors — their syntax passes through as text.
+- Attribute references (`{name}`) and inline anchors — their syntax passes
+  through as text.
+- A macro's attribute list stays raw; splitting it into positional and named
+  attributes is not done yet.
 - Inline parsing of section and block titles.
 - Table cell specifiers (`2+|`, `a|`, alignments) and the csv/dsv table
   flavours — a specifier stays as part of the cell's text.

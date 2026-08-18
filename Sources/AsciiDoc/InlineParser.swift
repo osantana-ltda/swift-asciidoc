@@ -93,6 +93,16 @@ public enum InlineParser {
     /// `^` and `~` have no doubled form and take no spaces in their content.
     private static let singleOnly: Set<Character> = ["^", "~"]
 
+    /// The macro names recognised, the way Asciidoctor recognises only its
+    /// registered macros: an unknown `name:target[...]` stays text, which is
+    /// what keeps `ratio:3[citation-style]` prose from becoming markup.
+    private static let macroNames: Set<String> = [
+        "link", "mailto", "xref", "image", "icon", "kbd", "btn", "menu",
+        "footnote", "pass", "stem", "latexmath", "asciimath",
+    ]
+
+    private static let urlSchemes = ["https://", "http://", "ftp://", "irc://"]
+
     private static func parse(_ characters: ArraySlice<Positioned>) -> [Inline] {
         var inlines: [Inline] = []
         var text = ""
@@ -119,12 +129,39 @@ public enum InlineParser {
         while index < characters.endIndex {
             let current = characters[index]
 
-            // An escaped markup character is that character, as text.
-            if current.character == "\\", index + 1 < characters.endIndex,
-                variants.keys.contains(characters[index + 1].character)
+            // An escaped markup character — a span delimiter, or the start of
+            // something that would otherwise parse as a macro — is text. A
+            // backslash before anything else is an ordinary backslash, so
+            // `C:\name` keeps it.
+            if current.character == "\\", index + 1 < characters.endIndex {
+                let next = characters[index + 1]
+                let escapesMacro =
+                    matchXref(in: characters, at: index + 1) != nil
+                    || matchURL(in: characters, at: index + 1) != nil
+                    || matchMacro(in: characters, at: index + 1) != nil
+
+                if variants.keys.contains(next.character) || escapesMacro {
+                    appendText(next)
+                    index += 2
+                    continue
+                }
+            }
+
+            if current.character == "<", let match = matchXref(in: characters, at: index) {
+                flushText()
+                inlines.append(.macro(match.macro))
+                index = match.next
+                continue
+            }
+
+            if current.character.isLetter,
+                index == characters.startIndex || !isWord(characters[index - 1].character),
+                let match = matchURL(in: characters, at: index)
+                    ?? matchMacro(in: characters, at: index)
             {
-                appendText(characters[index + 1])
-                index += 2
+                flushText()
+                inlines.append(.macro(match.macro))
+                index = match.next
                 continue
             }
 
@@ -258,6 +295,214 @@ public enum InlineParser {
         }
 
         return nil
+    }
+
+    // MARK: - Macros
+
+    private struct MacroMatch {
+        let macro: Inline.Macro
+        let next: Int
+    }
+
+    /// `name:target[attrlist]`, for a known name at a word boundary.
+    private static func matchMacro(
+        in characters: ArraySlice<Positioned>,
+        at index: Int
+    ) -> MacroMatch? {
+        var cursor = index
+        var name = ""
+
+        while cursor < characters.endIndex {
+            let character = characters[cursor].character
+            guard character.isLetter || character.isNumber || character == "-" else {
+                break
+            }
+            name.append(character)
+            cursor += 1
+        }
+
+        guard cursor < characters.endIndex, characters[cursor].character == ":",
+            macroNames.contains(name)
+        else {
+            return nil
+        }
+        cursor += 1
+
+        var target = ""
+        while cursor < characters.endIndex {
+            let character = characters[cursor].character
+            guard !isSpace(character), character != "[" else {
+                break
+            }
+            target.append(character)
+            cursor += 1
+        }
+
+        guard cursor < characters.endIndex, characters[cursor].character == "[",
+            let list = attributeList(in: characters, openingAt: cursor)
+        else {
+            return nil
+        }
+
+        return MacroMatch(
+            macro: Inline.Macro(
+                name: name,
+                target: target,
+                attributes: list.text,
+                range: SourceRange(
+                    start: characters[index].location,
+                    end: characters[list.end - 1].end
+                )
+            ),
+            next: list.end
+        )
+    }
+
+    /// A bare URL, with or without `[text]`, normalised to a `link` macro.
+    /// Trailing punctuation stays outside the link, so a sentence ending in a
+    /// URL does not link its own full stop.
+    private static func matchURL(
+        in characters: ArraySlice<Positioned>,
+        at index: Int
+    ) -> MacroMatch? {
+        guard
+            let scheme = urlSchemes.first(where: { matches($0, in: characters, at: index) })
+        else {
+            return nil
+        }
+
+        var cursor = index + scheme.count
+        var url = scheme
+
+        while cursor < characters.endIndex {
+            let character = characters[cursor].character
+            guard !isSpace(character), character != "[", character != "]",
+                character != "<", character != ">"
+            else {
+                break
+            }
+            url.append(character)
+            cursor += 1
+        }
+
+        while let last = url.last, ".,;:!?".contains(last) {
+            url.removeLast()
+            cursor -= 1
+        }
+
+        guard url.count > scheme.count else {
+            return nil
+        }
+
+        var attributes = ""
+        var next = cursor
+        if cursor < characters.endIndex, characters[cursor].character == "[",
+            let list = attributeList(in: characters, openingAt: cursor)
+        {
+            attributes = list.text
+            next = list.end
+        }
+
+        return MacroMatch(
+            macro: Inline.Macro(
+                name: "link",
+                target: url,
+                attributes: attributes,
+                range: SourceRange(
+                    start: characters[index].location,
+                    end: characters[next - 1].end
+                )
+            ),
+            next: next
+        )
+    }
+
+    /// `<<target>>` or `<<target,text>>`, normalised to an `xref` macro.
+    private static func matchXref(
+        in characters: ArraySlice<Positioned>,
+        at index: Int
+    ) -> MacroMatch? {
+        guard matches("<<", in: characters, at: index) else {
+            return nil
+        }
+
+        var cursor = index + 2
+        var inner = ""
+
+        while cursor + 1 < characters.endIndex {
+            if characters[cursor].character == ">", characters[cursor + 1].character == ">" {
+                let comma = inner.firstIndex(of: ",")
+                let target = comma.map { String(inner[inner.startIndex..<$0]) } ?? inner
+                let text = comma.map { String(inner[inner.index(after: $0)...]) } ?? ""
+
+                return MacroMatch(
+                    macro: Inline.Macro(
+                        name: "xref",
+                        target: trimmed(target),
+                        attributes: trimmed(text),
+                        range: SourceRange(
+                            start: characters[index].location,
+                            end: characters[cursor + 1].end
+                        )
+                    ),
+                    next: cursor + 2
+                )
+            }
+            inner.append(characters[cursor].character)
+            cursor += 1
+        }
+
+        return nil
+    }
+
+    /// The raw text between `[` and an unescaped `]`, and the index after the
+    /// bracket.
+    private static func attributeList(
+        in characters: ArraySlice<Positioned>,
+        openingAt open: Int
+    ) -> (text: String, end: Int)? {
+        var cursor = open + 1
+        var text = ""
+
+        while cursor < characters.endIndex {
+            let character = characters[cursor].character
+            if character == "\\", cursor + 1 < characters.endIndex,
+                characters[cursor + 1].character == "]"
+            {
+                text.append("]")
+                cursor += 2
+                continue
+            }
+            if character == "]" {
+                return (text, cursor + 1)
+            }
+            text.append(character)
+            cursor += 1
+        }
+
+        return nil
+    }
+
+    private static func matches(
+        _ literal: String,
+        in characters: ArraySlice<Positioned>,
+        at index: Int
+    ) -> Bool {
+        var cursor = index
+        for character in literal {
+            guard cursor < characters.endIndex, characters[cursor].character == character else {
+                return false
+            }
+            cursor += 1
+        }
+        return true
+    }
+
+    private static func trimmed(_ text: String) -> String {
+        var slice = text[...]
+        while slice.first == " " { slice = slice.dropFirst() }
+        while slice.last == " " { slice = slice.dropLast() }
+        return String(slice)
     }
 
     /// The closing pair of an unconstrained span.

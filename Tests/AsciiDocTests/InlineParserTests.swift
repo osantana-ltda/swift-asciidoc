@@ -172,9 +172,10 @@ func rangesExtractFaithfully(_ source: String) {
             case .text(let value, _):
                 #expect(extracted == value)
             case .span(let span):
-                #expect(extracted.hasPrefix(String(extracted.first ?? " ")))
                 #expect(extracted.count >= 2)
                 check(span.inlines)
+            case .macro:
+                #expect(extracted.count >= 2)
             }
         }
     }
@@ -185,5 +186,156 @@ func rangesExtractFaithfully(_ source: String) {
 extension Inline.Span {
     fileprivate func plainTextEquals(_ expected: String) -> Bool {
         inlines.map(\.plainText).joined() == expected
+    }
+}
+
+// MARK: - Macros
+
+private func macro(_ inline: Inline) -> Inline.Macro? {
+    guard case .macro(let macro) = inline else {
+        return nil
+    }
+    return macro
+}
+
+@Test func linkMacroParses() {
+    let parsed = inlines("see link:https://x.io[the site] now")
+
+    #expect(parsed.count == 3)
+    let link = try! #require(macro(parsed[1]))
+    #expect(link.name == "link")
+    #expect(link.target == "https://x.io")
+    #expect(link.attributes == "the site")
+    #expect(link.plainTextIs("the site"))
+}
+
+@Test func bareURLsBecomeLinks() {
+    let parsed = inlines("read https://example.com now")
+
+    let link = try! #require(macro(parsed[1]))
+    #expect(link.name == "link")
+    #expect(link.target == "https://example.com")
+    #expect(link.attributes.isEmpty)
+}
+
+@Test func aTrailingFullStopStaysOutsideTheLink() {
+    let parsed = inlines("visit https://x.io.")
+
+    let link = try! #require(macro(parsed[1]))
+    #expect(link.target == "https://x.io")
+    #expect(parsed[2].plainText == ".")
+}
+
+@Test func aURLWithTextTakesItsBrackets() {
+    let parsed = inlines("https://example.com[the site]")
+
+    #expect(parsed.count == 1)
+    let link = try! #require(macro(parsed[0]))
+    #expect(link.target == "https://example.com")
+    #expect(link.attributes == "the site")
+}
+
+@Test func xrefShorthandParses() {
+    let parsed = inlines("see <<intro>> and <<intro,the intro>>")
+
+    let bare = try! #require(macro(parsed[1]))
+    #expect(bare.name == "xref")
+    #expect(bare.target == "intro")
+    #expect(bare.attributes.isEmpty)
+
+    let titled = try! #require(macro(parsed[3]))
+    #expect(titled.target == "intro")
+    #expect(titled.attributes == "the intro")
+}
+
+@Test func emptyTargetMacrosParse() {
+    let parsed = inlines("press kbd:[F5] to run.footnote:[On most systems.]")
+
+    let kbd = try! #require(macro(parsed[1]))
+    #expect(kbd.name == "kbd")
+    #expect(kbd.target.isEmpty)
+    #expect(kbd.attributes == "F5")
+
+    let footnote = try! #require(macro(parsed[3]))
+    #expect(footnote.name == "footnote")
+    #expect(footnote.attributes == "On most systems.")
+}
+
+@Test func unknownMacroNamesStayText() {
+    let parsed = inlines("the ratio:3[citation] here")
+
+    #expect(parsed.count == 1)
+    #expect(parsed[0].plainText == "the ratio:3[citation] here")
+}
+
+@Test func aColonWithoutBracketsIsText() {
+    let parsed = inlines("note: this matters")
+
+    #expect(parsed.count == 1)
+    #expect(parsed[0].plainText == "note: this matters")
+}
+
+@Test func escapedMacrosAreText() {
+    let parsed = inlines("type \\link:x[y] literally")
+
+    #expect(parsed.count == 1)
+    #expect(parsed[0].plainText == "type link:x[y] literally")
+}
+
+@Test func backslashesInOrdinaryTextSurvive() {
+    let parsed = inlines("the path C:\\name stays")
+
+    #expect(parsed.count == 1)
+    #expect(parsed[0].plainText == "the path C:\\name stays")
+}
+
+@Test func anEscapedBracketStaysInTheAttrlist() {
+    let parsed = inlines("image:shot.png[a \\] bracket]")
+
+    let image = try! #require(macro(parsed[0]))
+    #expect(image.attributes == "a ] bracket")
+}
+
+@Test func macrosNestInsideSpans() {
+    let parsed = inlines("*see link:x[y]*")
+
+    guard case .span(let strong) = parsed[0] else {
+        Issue.record("expected a span")
+        return
+    }
+    #expect(strong.inlines.count == 2)
+    #expect(macro(strong.inlines[1])?.name == "link")
+}
+
+@Test func macroRangesExtractFaithfully() {
+    let source = "see link:https://x.io[site] and <<intro,text>> plus https://y.io."
+    let text = source as NSString
+
+    for inline in inlines(source) {
+        let extracted = text.substring(
+            with: NSRange(
+                location: inline.range.start.offset,
+                length: inline.range.end.offset - inline.range.start.offset
+            )
+        )
+
+        if let m = macro(inline) {
+            switch m.name {
+            case "link" where !m.attributes.isEmpty:
+                #expect(extracted == "link:https://x.io[site]")
+            case "link":
+                #expect(extracted == "https://y.io")
+            case "xref":
+                #expect(extracted == "<<intro,text>>")
+            default:
+                Issue.record("unexpected macro \(m.name)")
+            }
+        }
+    }
+}
+
+extension Inline.Macro {
+    fileprivate func plainTextIs(_ expected: String) -> Bool {
+        Inline.macro(self).plainText == expected
     }
 }

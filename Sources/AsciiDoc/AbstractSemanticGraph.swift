@@ -226,6 +226,21 @@ public enum AbstractSemanticGraph {
                 "inlines": span.inlines.map(encodeInline),
                 "location": location(span.range),
             ]
+
+        case .macro(let macro):
+            // The specification has not reached macro encoding; the shape
+            // follows the span pattern with `form: macro`.
+            var node: [String: Any] = [
+                "name": macro.name,
+                "type": "inline",
+                "form": "macro",
+                "target": macro.target,
+                "location": location(macro.range),
+            ]
+            if !macro.attributes.isEmpty {
+                node["attrlist"] = macro.attributes
+            }
+            return node
         }
     }
 

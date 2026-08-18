@@ -6,6 +6,28 @@
 public enum Inline: Hashable, Sendable {
     case text(value: String, range: SourceRange)
     case span(Span)
+    case macro(Macro)
+
+    /// An inline macro: `name:target[attrlist]`, a bare URL, or the `<<xref>>`
+    /// shorthand — the last two normalised to `link` and `xref` macros.
+    public struct Macro: Hashable, Sendable {
+        public var name: String
+        /// Between the colon and the bracket; the URL itself for links, empty
+        /// for macros like `footnote:[...]` and `kbd:[...]`.
+        public var target: String
+        /// The raw attribute list between the brackets, unparsed. Splitting it
+        /// into positional and named attributes is recorded as not done yet.
+        public var attributes: String
+        /// The whole macro, name through closing bracket.
+        public var range: SourceRange
+
+        public init(name: String, target: String, attributes: String, range: SourceRange) {
+            self.name = name
+            self.target = target
+            self.attributes = attributes
+            self.range = range
+        }
+    }
 
     public struct Span: Hashable, Sendable {
         public enum Variant: String, Hashable, Sendable {
@@ -48,14 +70,18 @@ public enum Inline: Hashable, Sendable {
         switch self {
         case .text(_, let range): range
         case .span(let span): span.range
+        case .macro(let macro): macro.range
         }
     }
 
     /// The plain text of this inline and everything under it, markup dropped.
+    /// For a macro this is its display text — the attribute list when there is
+    /// one, the target otherwise.
     public var plainText: String {
         switch self {
         case .text(let value, _): value
         case .span(let span): span.inlines.map(\.plainText).joined()
+        case .macro(let macro): macro.attributes.isEmpty ? macro.target : macro.attributes
         }
     }
 }
