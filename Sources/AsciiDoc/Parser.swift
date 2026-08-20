@@ -13,7 +13,12 @@
 /// round trip even where this parser does not yet understand it.
 public enum Parser {
     public static func parse(_ source: String) -> Document {
-        let lines = LineReader.lines(of: source)
+        parse(lines: LineReader.lines(of: source), sourceLength: source.utf16.count)
+    }
+
+    /// The entry the incremental parser uses: the lines are already split, so a
+    /// spliced edit skips the string scan entirely.
+    static func parse(lines: [SourceLine], sourceLength: Int) -> Document {
         var state = State(lines: lines)
         let header = state.parseHeader()
         var blocks = state.parseBlocks(untilSectionLevel: nil)
@@ -32,10 +37,14 @@ public enum Parser {
                 start: start ?? SourceLocation(offset: 0, line: 1, column: 1),
                 end: end ?? SourceLocation(offset: 0, line: 1, column: 1)
             ),
-            // Checked in UTF-16, because `hasSuffix("\n")` is false for a CRLF
-            // document — Swift reads the final `\r\n` as one grapheme.
-            endsInNewline: source.utf16.last == 0x0A,
-            sourceLineCount: lines.count
+            // A trailing terminator exists exactly when the last line's content
+            // ends before the source does. This is UTF-16 arithmetic rather
+            // than `hasSuffix("\n")`, which is false for a CRLF document —
+            // Swift reads the final `\r\n` as one grapheme.
+            endsInNewline: (lines.last?.range.end.offset ?? 0) < sourceLength,
+            sourceLineCount: lines.count,
+            sourceLines: lines,
+            sourceLength: sourceLength
         )
     }
 }
@@ -65,7 +74,7 @@ extension Parser {
         return [preamble] + blocks[firstSection...]
     }
 
-    fileprivate struct State {
+    struct State {
         let lines: [SourceLine]
         var index = 0
 
@@ -182,7 +191,7 @@ extension Parser {
             return blocks
         }
 
-        private mutating func parseBlock() -> Block? {
+        mutating func parseBlock() -> Block? {
             var metadata = Metadata()
             metadata.collect(from: &self)
 

@@ -61,6 +61,32 @@ Anything not modelled is kept as an `.unparsed` block rather than dropped or
 guessed at, so a table survives a round trip through a parser that does not yet
 understand tables.
 
+### Incremental reparsing
+
+`IncrementalParser.reparse(_:applying:)` reparses after an edit with work
+proportional to the damage, not to the document. The contract is exact — the
+result must equal `Parser.parse` of the edited source, positions included — and
+a generated matrix of thousands of edits enforces it. Three paths, cheapest
+first: an edit touching only blank lines between blocks shifts positions and
+reparses nothing; an ordinary edit reparses from the damaged block (widened to
+its metadata and to any block it could merge with) and stops the moment it
+lands on an untouched boundary; anything that can change structure beyond the
+damage — header edits, headings appearing or disappearing, a delimiter left
+open — falls back to a full reparse over the already-split lines.
+
+At ~655 pages: full parse 101 ms, incremental keystroke 8.7 ms median with all
+samples on the fast path, delimiter fallback 64 ms. The fast path is dominated
+by the O(n) shift of retained line and block positions — the known remedy is
+storing offsets relative to a tree, recorded and deferred. At chapter scale
+(the application's unit of editing) a keystroke is well under a millisecond:
+
+```bash
+.build/release/asciidoc-tck-adapter --bench-reparse --chapters 1200
+```
+
+Offsets are UTF-16 against an LF document; a CRLF document gets a best-effort
+full reparse of its normalised text.
+
 ### Not yet implemented
 
 - Attribute references (`{name}`) and inline anchors — their syntax passes
@@ -74,8 +100,6 @@ understand tables.
 - Nested lists: a deeper marker stays with the item that precedes it.
 - `include::`, `ifdef::` and the rest of the preprocessor.
 - Author and revision lines are captured verbatim, not split into fields.
-- Incremental reparsing. The editor prototype has shown what that needs; this
-  parser reparses from the top.
 
 ## Scope
 

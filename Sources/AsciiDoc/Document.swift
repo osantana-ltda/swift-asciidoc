@@ -27,19 +27,29 @@ public struct Document: Hashable, Sendable {
     /// How many lines the source had, so trailing blank lines survive the
     /// round trip; zero for documents built programmatically.
     public var sourceLineCount: Int
+    /// The source split into lines, retained so an edit can be reparsed
+    /// incrementally without re-splitting the whole string. Empty for
+    /// documents built programmatically.
+    public var sourceLines: [SourceLine]
+    /// The source length in UTF-16 code units.
+    public var sourceLength: Int
 
     public init(
         header: DocumentHeader?,
         blocks: [Block],
         range: SourceRange,
         endsInNewline: Bool = true,
-        sourceLineCount: Int = 0
+        sourceLineCount: Int = 0,
+        sourceLines: [SourceLine] = [],
+        sourceLength: Int = 0
     ) {
         self.header = header
         self.blocks = blocks
         self.range = range
         self.endsInNewline = endsInNewline
         self.sourceLineCount = sourceLineCount
+        self.sourceLines = sourceLines
+        self.sourceLength = sourceLength
     }
 
     /// Document attributes declared in the header, by name.

@@ -16,6 +16,75 @@ import Foundation
 // the adapter exits non-zero — reporting success without it would make a
 // conformance report meaningless.
 
+// Benchmark: full parse against incremental reparse at book scale, on a
+// generated document. Needs no input.
+if CommandLine.arguments.contains("--bench-reparse") {
+    var chapters = 400
+    if let index = CommandLine.arguments.firstIndex(of: "--chapters"),
+        index + 1 < CommandLine.arguments.count,
+        let requested = Int(CommandLine.arguments[index + 1])
+    {
+        chapters = requested
+    }
+
+    let source = (1...chapters).map { number in
+        """
+        == Chapter \(number)
+
+        A paragraph of ordinary prose, long enough to be worth parsing but not so long that it dominates the measurement, sitting in chapter \(number).
+
+        [source,swift]
+        ----
+        let value = \(number)
+        ----
+
+        * a list item
+        * another list item
+
+        A closing paragraph for chapter \(number).
+
+        """
+    }.joined(separator: "\n")
+
+    // The package sets no platform floor, so it predates ContinuousClock;
+    // Date is precise enough at these magnitudes.
+    func milliseconds(_ body: () -> Void) -> Double {
+        let started = Date()
+        body()
+        return -started.timeIntervalSinceNow * 1000
+    }
+
+    var document = Parser.parse(source)
+    print("Document: \(chapters) chapters, \(source.utf16.count) UTF-16 units, \(document.sourceLineCount) lines, ~\(source.utf16.count / 2000) pages")
+
+    let full = milliseconds { document = Parser.parse(source) }
+    print(String(format: "Full parse                     %8.2f ms", full))
+
+    // Typing in a paragraph in the middle of the document.
+    let caret = source.utf16.count / 2
+    var samples: [Double] = []
+    var incrementalCount = 0
+    for step in 0..<25 {
+        let edit = SourceEdit(start: caret + step, length: 0, replacement: "x")
+        var result: IncrementalParser.Result?
+        samples.append(milliseconds { result = IncrementalParser.reparse(document, applying: edit) })
+        if let result {
+            document = result.document
+            if result.incremental { incrementalCount += 1 }
+        }
+    }
+    samples.sort()
+    print(String(format: "Keystroke, incremental — median%8.2f ms   (%d/25 on the fast path)", samples[samples.count / 2], incrementalCount))
+    print(String(format: "Keystroke, incremental — worst %8.2f ms", samples[samples.count - 1]))
+
+    let enter = milliseconds {
+        _ = IncrementalParser.reparse(document, applying: SourceEdit(start: caret, length: 0, replacement: "\n----\n"))
+    }
+    print(String(format: "Opening a delimiter (fallback) %8.2f ms", enter))
+
+    exit(0)
+}
+
 let input = FileHandle.standardInput.readDataToEndOfFile()
 
 // Round-trip mode: AsciiDoc on stdin, parse → serialize → stdout. With it,
