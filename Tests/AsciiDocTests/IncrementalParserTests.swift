@@ -216,7 +216,8 @@ private let chapter = """
 @Test func mergingTwoParagraphsMatches() {
     // Delete the blank line between Alpha and Beta, merging them.
     let gap = (chapter as NSString).range(of: "it.\n\nBeta")
-    _ = assertMatchesFullParse(chapter, SourceEdit(start: gap.location + 4, length: 1, replacement: ""))
+    _ = assertMatchesFullParse(
+        chapter, SourceEdit(start: gap.location + 4, length: 1, replacement: ""))
 }
 
 @Test func splittingAParagraphIsIncremental() {

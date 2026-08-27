@@ -193,7 +193,8 @@ public enum IncrementalParser {
                     SourceLine(
                         text: "",
                         range: SourceRange(
-                            start: SourceLocation(offset: offset, line: fragment.count + 1, column: 1),
+                            start: SourceLocation(
+                                offset: offset, line: fragment.count + 1, column: 1),
                             end: SourceLocation(offset: offset, line: fragment.count + 1, column: 1)
                         ),
                         number: fragment.count + 1
@@ -645,7 +646,9 @@ public enum IncrementalParser {
 
     // MARK: - Shifting
 
-    private static func shift(_ location: SourceLocation, offsetBy dOffset: Int, linesBy dLines: Int)
+    private static func shift(
+        _ location: SourceLocation, offsetBy dOffset: Int, linesBy dLines: Int
+    )
         -> SourceLocation
     {
         SourceLocation(

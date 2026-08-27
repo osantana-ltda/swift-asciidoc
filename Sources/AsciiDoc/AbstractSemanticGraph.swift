@@ -246,7 +246,9 @@ public enum AbstractSemanticGraph {
 
     /// A verbatim block's content as a single text node — listings and
     /// literals take no inline markup, which is their point.
-    private static func joinedText(of block: Block, droppingMarker markerLength: Int = 0) -> [String: Any]? {
+    private static func joinedText(of block: Block, droppingMarker markerLength: Int = 0)
+        -> [String: Any]?
+    {
         guard let first = block.lines.first, let last = block.lines.last else {
             return nil
         }

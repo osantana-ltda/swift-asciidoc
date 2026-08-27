@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Osvaldo Santana Neto
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import Foundation
 import Testing
 
 @testable import AsciiDoc
@@ -454,5 +455,3 @@ import Testing
     }
     check(document.blocks)
 }
-
-import Foundation

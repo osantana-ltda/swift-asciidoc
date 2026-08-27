@@ -55,7 +55,9 @@ if CommandLine.arguments.contains("--bench-reparse") {
     }
 
     var document = Parser.parse(source)
-    print("Document: \(chapters) chapters, \(source.utf16.count) UTF-16 units, \(document.sourceLineCount) lines, ~\(source.utf16.count / 2000) pages")
+    print(
+        "Document: \(chapters) chapters, \(source.utf16.count) UTF-16 units, \(document.sourceLineCount) lines, ~\(source.utf16.count / 2000) pages"
+    )
 
     let full = milliseconds { document = Parser.parse(source) }
     print(String(format: "Full parse                     %8.2f ms", full))
@@ -67,18 +69,23 @@ if CommandLine.arguments.contains("--bench-reparse") {
     for step in 0..<25 {
         let edit = SourceEdit(start: caret + step, length: 0, replacement: "x")
         var result: IncrementalParser.Result?
-        samples.append(milliseconds { result = IncrementalParser.reparse(document, applying: edit) })
+        samples.append(
+            milliseconds { result = IncrementalParser.reparse(document, applying: edit) })
         if let result {
             document = result.document
             if result.incremental { incrementalCount += 1 }
         }
     }
     samples.sort()
-    print(String(format: "Keystroke, incremental — median%8.2f ms   (%d/25 on the fast path)", samples[samples.count / 2], incrementalCount))
+    print(
+        String(
+            format: "Keystroke, incremental — median%8.2f ms   (%d/25 on the fast path)",
+            samples[samples.count / 2], incrementalCount))
     print(String(format: "Keystroke, incremental — worst %8.2f ms", samples[samples.count - 1]))
 
     let enter = milliseconds {
-        _ = IncrementalParser.reparse(document, applying: SourceEdit(start: caret, length: 0, replacement: "\n----\n"))
+        _ = IncrementalParser.reparse(
+            document, applying: SourceEdit(start: caret, length: 0, replacement: "\n----\n"))
     }
     print(String(format: "Opening a delimiter (fallback) %8.2f ms", enter))
 

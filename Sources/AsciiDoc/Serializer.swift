@@ -319,7 +319,8 @@ public enum Serializer {
 
         // Canonical, for built trees. Sections carry their title in the
         // heading line, not in a `.Title` row.
-        if case .section = block.kind {} else if let title = block.title {
+        if case .section = block.kind {
+        } else if let title = block.title {
             emitter.emit(text: ".\(title.text)")
         }
 

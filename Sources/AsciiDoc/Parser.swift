@@ -55,7 +55,10 @@ extension Parser {
     /// document has a header. A document with leading text and no section has
     /// no preamble, and neither does one without a header.
     fileprivate static func wrapPreamble(_ blocks: [Block]) -> [Block] {
-        guard let firstSection = blocks.firstIndex(where: { if case .section = $0.kind { true } else { false } }),
+        guard
+            let firstSection = blocks.firstIndex(where: {
+                if case .section = $0.kind { true } else { false }
+            }),
             firstSection > 0
         else {
             return blocks
@@ -451,7 +454,8 @@ extension Parser {
             }
 
             var items: [Block] = []
-            while let line = current, let next = ListMarker(line: line), next.depth >= marker.depth {
+            while let line = current, let next = ListMarker(line: line), next.depth >= marker.depth
+            {
                 guard next.isOrdered == marker.isOrdered, next.depth == marker.depth else {
                     // A deeper marker belongs to the item just read; nesting is
                     // not modelled yet, so it is left to the item's own lines.
@@ -683,9 +687,10 @@ extension Parser {
             case "pass": .passthrough
             case "open": .open
             case "comment": .comment
-            case "NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION": .admonition(
-                variant: style.lowercased()
-            )
+            case "NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION":
+                .admonition(
+                    variant: style.lowercased()
+                )
             default: nil
             }
         }
@@ -717,7 +722,8 @@ extension Parser {
             // A style that turns a paragraph into a compound block leaves the
             // text as that block's child, not as its own lines: `[quote]` over a
             // paragraph is a quote *containing* a paragraph.
-            if case .paragraph = kind {} else if !lines.isEmpty, blocks.isEmpty,
+            if case .paragraph = kind {
+            } else if !lines.isEmpty, blocks.isEmpty,
                 Self.isCompound(kind)
             {
                 blocks = [
@@ -919,7 +925,8 @@ enum AttributeListParser {
             if let equals = trimmed.firstIndex(of: "="), !trimmed.hasPrefix("#"),
                 !trimmed.hasPrefix(".")
             {
-                let name = String(trimmed[trimmed.startIndex..<equals]).trimmingCharactersInWhitespace
+                let name = String(trimmed[trimmed.startIndex..<equals])
+                    .trimmingCharactersInWhitespace
                 var value = String(trimmed[trimmed.index(after: equals)...])
                     .trimmingCharactersInWhitespace
                 if value.count >= 2, value.hasPrefix("\""), value.hasSuffix("\"") {
