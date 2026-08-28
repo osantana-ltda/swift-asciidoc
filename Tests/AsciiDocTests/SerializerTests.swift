@@ -63,6 +63,8 @@ private let roundTripSources: [String] = [
     "|===\n| a \\| pipe | c\n|===\n",
     // Attribute entry in the body.\n
     "Body.\n\n:name: value\n\nMore body.\n",
+    // Attribute references: defined, unknown and escaped all stay verbatim.
+    "= T\n:product: Bookled\n\nBuilt with {product}, not {unknown} or \\{escaped}.\n",
     // Trailing shapes.
     "No trailing newline",
     "Trailing blanks.\n\n\n",

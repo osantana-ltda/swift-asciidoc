@@ -7,6 +7,10 @@ public enum Inline: Hashable, Sendable {
     case text(value: String, range: SourceRange)
     case span(Span)
     case macro(Macro)
+    /// `{name}` — a document attribute reference. The parse keeps the
+    /// reference, never the value: substitution is a rendering concern, and
+    /// the source round-trips untouched.
+    case attributeReference(name: String, range: SourceRange)
 
     /// An inline macro: `name:target[attrlist]`, a bare URL, or the `<<xref>>`
     /// shorthand — the last two normalised to `link` and `xref` macros.
@@ -71,17 +75,20 @@ public enum Inline: Hashable, Sendable {
         case .text(_, let range): range
         case .span(let span): span.range
         case .macro(let macro): macro.range
+        case .attributeReference(_, let range): range
         }
     }
 
     /// The plain text of this inline and everything under it, markup dropped.
     /// For a macro this is its display text — the attribute list when there is
-    /// one, the target otherwise.
+    /// one, the target otherwise. An attribute reference stays in its raw
+    /// form: plain text has no document to resolve against.
     public var plainText: String {
         switch self {
         case .text(let value, _): value
         case .span(let span): span.inlines.map(\.plainText).joined()
         case .macro(let macro): macro.attributes.isEmpty ? macro.target : macro.attributes
+        case .attributeReference(let name, _): "{\(name)}"
         }
     }
 }

@@ -11,6 +11,12 @@
 ///   than dropped; the §4.2 guarantee is "never silently lost".
 public enum HTMLRenderer {
     public static func render(_ document: Document) -> String {
+        // Attribute names are case-insensitive; references resolve against
+        // the lowercased header entries.
+        let attributes = Dictionary(
+            document.attributes.map { ($0.key.lowercased(), $0.value) },
+            uniquingKeysWith: { _, last in last }
+        )
         var html = ""
         if let header = document.header {
             if let title = header.title {
@@ -20,34 +26,35 @@ public enum HTMLRenderer {
                 html += "<p class=\"author\">\(escape(author))</p>\n"
             }
         }
-        html += render(document.blocks)
+        html += render(document.blocks, attributes: attributes)
         return html
     }
 
-    static func render(_ blocks: [Block]) -> String {
-        blocks.map(render(_:)).joined()
+    static func render(_ blocks: [Block], attributes: [String: String] = [:]) -> String {
+        blocks.map { render($0, attributes: attributes) }.joined()
     }
 
-    static func render(_ block: Block) -> String {
+    static func render(_ block: Block, attributes: [String: String] = [:]) -> String {
         switch block.kind {
         case .section(let level):
             // AsciiDoc levels: `=` is the document title (h1), `==` is
             // section level 1 (h2), and so on.
             let heading = min(max(level + 1, 1), 6)
-            let title = block.title.map { inlineHTML(of: $0.text) } ?? ""
-            return "<h\(heading)>\(title)</h\(heading)>\n" + render(block.blocks)
+            let title = block.title.map { inlineHTML(of: $0.text, attributes: attributes) } ?? ""
+            return "<h\(heading)>\(title)</h\(heading)>\n"
+                + render(block.blocks, attributes: attributes)
 
         case .preamble:
-            return render(block.blocks)
+            return render(block.blocks, attributes: attributes)
 
         case .paragraph:
-            return "<p>\(inlineHTML(of: block.lines))</p>\n"
+            return "<p>\(inlineHTML(of: block.lines, attributes: attributes))</p>\n"
 
         case .admonition(let variant):
             let label = variant.uppercased()
             return "<aside class=\"admonition \(variant.lowercased())\">"
                 + "<strong>\(escape(label))</strong> "
-                + "<span>\(inlineHTML(of: block.lines))</span></aside>\n"
+                + "<span>\(inlineHTML(of: block.lines, attributes: attributes))</span></aside>\n"
 
         case .listing:
             let language =
@@ -62,29 +69,29 @@ public enum HTMLRenderer {
         case .quote:
             let body =
                 block.blocks.isEmpty
-                ? "<p>\(inlineHTML(of: block.lines))</p>\n"
-                : render(block.blocks)
+                ? "<p>\(inlineHTML(of: block.lines, attributes: attributes))</p>\n"
+                : render(block.blocks, attributes: attributes)
             return "<blockquote>\(body)</blockquote>\n"
 
         case .example:
             let body =
                 block.blocks.isEmpty
-                ? "<p>\(inlineHTML(of: block.lines))</p>\n"
-                : render(block.blocks)
+                ? "<p>\(inlineHTML(of: block.lines, attributes: attributes))</p>\n"
+                : render(block.blocks, attributes: attributes)
             return "<div class=\"example\">\(body)</div>\n"
 
         case .sidebar:
             let body =
                 block.blocks.isEmpty
-                ? "<p>\(inlineHTML(of: block.lines))</p>\n"
-                : render(block.blocks)
+                ? "<p>\(inlineHTML(of: block.lines, attributes: attributes))</p>\n"
+                : render(block.blocks, attributes: attributes)
             return "<aside class=\"sidebar\">\(body)</aside>\n"
 
         case .open:
             let body =
                 block.blocks.isEmpty
-                ? "<p>\(inlineHTML(of: block.lines))</p>\n"
-                : render(block.blocks)
+                ? "<p>\(inlineHTML(of: block.lines, attributes: attributes))</p>\n"
+                : render(block.blocks, attributes: attributes)
             return "<div class=\"open\">\(body)</div>\n"
 
         case .passthrough:
@@ -93,26 +100,27 @@ public enum HTMLRenderer {
             return block.text + "\n"
 
         case .table:
-            return "<table>\n\(render(block.blocks))</table>\n"
+            return "<table>\n\(render(block.blocks, attributes: attributes))</table>\n"
 
         case .tableRow(let header):
             let cell = header ? "th" : "td"
             let cells = block.blocks.map { child in
-                "<\(cell)>\(inlineHTML(of: child.lines))</\(cell)>"
+                "<\(cell)>\(inlineHTML(of: child.lines, attributes: attributes))</\(cell)>"
             }.joined()
             return "<tr>\(cells)</tr>\n"
 
         case .tableCell:
-            return "<td>\(inlineHTML(of: block.lines))</td>\n"
+            return "<td>\(inlineHTML(of: block.lines, attributes: attributes))</td>\n"
 
         case .unorderedList:
-            return "<ul>\n\(render(block.blocks))</ul>\n"
+            return "<ul>\n\(render(block.blocks, attributes: attributes))</ul>\n"
 
         case .orderedList:
-            return "<ol>\n\(render(block.blocks))</ol>\n"
+            return "<ol>\n\(render(block.blocks, attributes: attributes))</ol>\n"
 
         case .listItem:
-            return "<li>\(inlineHTML(of: strippedItemLines(block.lines)))</li>\n"
+            return
+                "<li>\(inlineHTML(of: strippedItemLines(block.lines), attributes: attributes))</li>\n"
 
         case .comment, .attributeEntry:
             // Not content: comments address the authors, attribute entries
@@ -126,11 +134,11 @@ public enum HTMLRenderer {
 
     // MARK: - Inlines
 
-    static func inlineHTML(of lines: [SourceLine]) -> String {
-        render(InlineParser.parse(lines))
+    static func inlineHTML(of lines: [SourceLine], attributes: [String: String] = [:]) -> String {
+        render(InlineParser.parse(lines), attributes: attributes)
     }
 
-    static func inlineHTML(of text: String) -> String {
+    static func inlineHTML(of text: String, attributes: [String: String] = [:]) -> String {
         let line = SourceLine(
             text: text,
             range: SourceRange(
@@ -138,20 +146,29 @@ public enum HTMLRenderer {
                 end: SourceLocation(offset: text.utf16.count, line: 0, column: text.utf16.count)
             ),
             number: 0)
-        return render(InlineParser.parse([line]))
+        return render(InlineParser.parse([line]), attributes: attributes)
     }
 
-    static func render(_ inlines: [Inline]) -> String {
-        inlines.map(render(_:)).joined()
+    static func render(_ inlines: [Inline], attributes: [String: String] = [:]) -> String {
+        inlines.map { render($0, attributes: attributes) }.joined()
     }
 
-    static func render(_ inline: Inline) -> String {
+    static func render(_ inline: Inline, attributes: [String: String] = [:]) -> String {
         switch inline {
         case .text(let value, _):
             return escape(value)
 
+        case .attributeReference(let name, _):
+            // Substitution is the renderer's job: a defined attribute
+            // resolves to its value, an unknown reference stays visibly
+            // literal — Asciidoctor's skip behavior, and the §4.2 instinct.
+            if let value = attributes[name.lowercased()] {
+                return escape(value)
+            }
+            return escape("{\(name)}")
+
         case .span(let span):
-            let body = render(span.inlines)
+            let body = render(span.inlines, attributes: attributes)
             switch span.variant {
             case .strong: return "<strong>\(body)</strong>"
             case .emphasis: return "<em>\(body)</em>"

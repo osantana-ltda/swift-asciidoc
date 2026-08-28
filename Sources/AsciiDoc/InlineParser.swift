@@ -139,12 +139,22 @@ public enum InlineParser {
                     matchXref(in: characters, at: index + 1) != nil
                     || matchURL(in: characters, at: index + 1) != nil
                     || matchMacro(in: characters, at: index + 1) != nil
+                    || matchAttributeReference(in: characters, at: index + 1) != nil
 
                 if variants.keys.contains(next.character) || escapesMacro {
                     appendText(next)
                     index += 2
                     continue
                 }
+            }
+
+            if current.character == "{",
+                let match = matchAttributeReference(in: characters, at: index)
+            {
+                flushText()
+                inlines.append(.attributeReference(name: match.name, range: match.range))
+                index = match.next
+                continue
             }
 
             if current.character == "<", let match = matchXref(in: characters, at: index) {
@@ -305,6 +315,45 @@ public enum InlineParser {
     }
 
     /// `name:target[attrlist]`, for a known name at a word boundary.
+    /// `{name}` — an attribute reference. Names follow AsciiDoc's rules:
+    /// they start with a letter, digit or underscore and continue with those
+    /// plus hyphens; anything else (a brace in prose, `{ x }`) is ordinary
+    /// text.
+    private static func matchAttributeReference(
+        in characters: ArraySlice<Positioned>, at index: Int
+    ) -> (name: String, range: SourceRange, next: Int)? {
+        guard index < characters.endIndex, characters[index].character == "{" else {
+            return nil
+        }
+        var cursor = index + 1
+        var name = ""
+        while cursor < characters.endIndex {
+            let character = characters[cursor].character
+            if character == "}" {
+                guard !name.isEmpty else {
+                    return nil
+                }
+                return (
+                    name,
+                    SourceRange(
+                        start: characters[index].location,
+                        end: characters[cursor].end
+                    ),
+                    cursor + 1
+                )
+            }
+            let valid =
+                character.isLetter || character.isNumber || character == "_"
+                || (!name.isEmpty && character == "-")
+            guard valid else {
+                return nil
+            }
+            name.append(character)
+            cursor += 1
+        }
+        return nil
+    }
+
     private static func matchMacro(
         in characters: ArraySlice<Positioned>,
         at index: Int

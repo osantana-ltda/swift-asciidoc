@@ -72,6 +72,21 @@ private func html(_ source: String) -> String {
     #expect(out.contains("<p>Visible.</p>"))
 }
 
+@Test func attributeReferencesSubstituteFromTheHeader() {
+    let out = html(
+        "= T\n:product-name: Bookled\n:Version: 1.0\n\n"
+            + "Use {product-name} {version} — not {unknown}.\n")
+
+    #expect(out.contains("Use Bookled 1.0"))
+    // Unknown references stay visibly literal — never silently dropped.
+    #expect(out.contains("{unknown}"))
+}
+
+@Test func substitutedValuesAreEscaped() {
+    let out = html("= T\n:snippet: a < b\n\nCompare {snippet} here.\n")
+    #expect(out.contains("Compare a &lt; b here."))
+}
+
 @Test func textIsEscaped() {
     let out = html("= T\n\nMind a < b & c > d.\n")
     #expect(out.contains("Mind a &lt; b &amp; c &gt; d."))

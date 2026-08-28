@@ -241,6 +241,17 @@ public enum AbstractSemanticGraph {
                 node["attrlist"] = macro.attributes
             }
             return node
+
+        case .attributeReference(let name, let range):
+            // Not reached by the specification either; the macro shape with
+            // its own form keeps the reference addressable.
+            return [
+                "name": "ref",
+                "type": "inline",
+                "form": "attribute-reference",
+                "target": name,
+                "location": location(range),
+            ]
         }
     }
 

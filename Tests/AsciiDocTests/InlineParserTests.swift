@@ -176,6 +176,8 @@ func rangesExtractFaithfully(_ source: String) {
                 check(span.inlines)
             case .macro:
                 #expect(extracted.count >= 2)
+            case .attributeReference(let name, _):
+                #expect(extracted == "{\(name)}")
             }
         }
     }
@@ -338,4 +340,51 @@ extension Inline.Macro {
     fileprivate func plainTextIs(_ expected: String) -> Bool {
         Inline.macro(self).plainText == expected
     }
+}
+
+// MARK: - Attribute references
+
+@Test func anAttributeReferenceParses() {
+    let parsed = inlines("built with {product-name} today")
+
+    #expect(parsed.count == 3)
+    guard case .attributeReference(let name, let range) = parsed[1] else {
+        Issue.record("expected an attribute reference")
+        return
+    }
+    #expect(name == "product-name")
+    #expect(range.start.offset == 11)
+    #expect(range.end.offset == 25)
+    #expect(parsed[1].plainText == "{product-name}")
+}
+
+@Test func bracesInProseStayText() {
+    // A space, an empty pair, a leading hyphen: none of these are names.
+    #expect(inlines("a { x } b").count == 1)
+    #expect(inlines("empty {} pair").count == 1)
+    #expect(inlines("odd {-name} start").count == 1)
+    #expect(inlines("unclosed {name").count == 1)
+}
+
+@Test func anEscapedReferenceIsLiteralText() {
+    let parsed = inlines("keep \\{name} literal")
+
+    #expect(parsed.count == 1)
+    #expect(parsed[0].plainText == "keep {name} literal")
+}
+
+@Test func referencesNestInsideSpans() {
+    let parsed = inlines("*bold {v}*")
+
+    guard case .span(let span) = parsed[0] else {
+        Issue.record("expected a span")
+        return
+    }
+    let hasReference = span.inlines.contains { inline in
+        if case .attributeReference(let name, _) = inline {
+            return name == "v"
+        }
+        return false
+    }
+    #expect(hasReference)
 }
