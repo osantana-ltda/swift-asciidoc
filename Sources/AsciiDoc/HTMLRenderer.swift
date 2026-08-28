@@ -158,6 +158,12 @@ public enum HTMLRenderer {
         case .text(let value, _):
             return escape(value)
 
+        case .anchor(let id, let reftext, _):
+            // The anchor is the target; its reference text, when given, is
+            // what a cross-reference without its own label would show, so it
+            // stays in the document as the anchor's content.
+            return "<span id=\"\(escapeAttribute(id))\">\(escape(reftext))</span>"
+
         case .attributeReference(let name, _):
             // Substitution is the renderer's job: a defined attribute
             // resolves to its value, an unknown reference stays visibly
@@ -191,6 +197,14 @@ public enum HTMLRenderer {
             case "kbd":
                 return
                     "<kbd>\(escape(macro.target.isEmpty ? macro.attributes : macro.target))</kbd>"
+            case "xref":
+                // Now that anchors exist, a cross-reference is a real link
+                // to one; without its own label it shows the target id,
+                // which is what a document with no reftext can honestly say.
+                let label = macro.attributes.isEmpty ? macro.target : macro.attributes
+                return "<a href=\"#\(escapeAttribute(macro.target))\">\(escape(label))</a>"
+            case "anchor":
+                return "<span id=\"\(escapeAttribute(macro.target))\"></span>"
             default:
                 // Preserved visibly, never dropped.
                 let attributes = macro.attributes.isEmpty ? "" : "[\(macro.attributes)]"

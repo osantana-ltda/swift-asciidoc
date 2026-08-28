@@ -252,6 +252,19 @@ public enum AbstractSemanticGraph {
                 "target": name,
                 "location": location(range),
             ]
+
+        case .anchor(let id, let reftext, let range):
+            var node: [String: Any] = [
+                "name": "anchor",
+                "type": "inline",
+                "form": "anchor",
+                "target": id,
+                "location": location(range),
+            ]
+            if !reftext.isEmpty {
+                node["reftext"] = reftext
+            }
+            return node
         }
     }
 

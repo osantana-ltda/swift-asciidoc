@@ -87,6 +87,21 @@ private func html(_ source: String) -> String {
     #expect(out.contains("Compare a &lt; b here."))
 }
 
+@Test func anchorsAndCrossReferencesLinkUp() {
+    let out = html(
+        "= T\n\n[[the-spot,The Spot]] is here.\n\n"
+            + "See <<the-spot>> and <<the-spot,that place>>.\n")
+
+    #expect(out.contains("<span id=\"the-spot\">The Spot</span>"))
+    #expect(out.contains("<a href=\"#the-spot\">the-spot</a>"))
+    #expect(out.contains("<a href=\"#the-spot\">that place</a>"))
+}
+
+@Test func theAnchorMacroFormRendersAsATarget() {
+    let out = html("= T\n\nanchor:spot[] marks it.\n")
+    #expect(out.contains("<span id=\"spot\"></span>"))
+}
+
 @Test func textIsEscaped() {
     let out = html("= T\n\nMind a < b & c > d.\n")
     #expect(out.contains("Mind a &lt; b &amp; c &gt; d."))

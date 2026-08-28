@@ -65,6 +65,8 @@ private let roundTripSources: [String] = [
     "Body.\n\n:name: value\n\nMore body.\n",
     // Attribute references: defined, unknown and escaped all stay verbatim.
     "= T\n:product: Bookled\n\nBuilt with {product}, not {unknown} or \\{escaped}.\n",
+    // Inline anchors, their reference text, and cross-references to them.
+    "Mark [[spot]] and [[fig.1,Figure 1]] here.\n\nSee <<spot>> or \\[[escaped]].\n",
     // Trailing shapes.
     "No trailing newline",
     "Trailing blanks.\n\n\n",

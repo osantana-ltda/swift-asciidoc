@@ -98,7 +98,7 @@ public enum InlineParser {
     /// what keeps `ratio:3[citation-style]` prose from becoming markup.
     private static let macroNames: Set<String> = [
         "link", "mailto", "xref", "image", "icon", "kbd", "btn", "menu",
-        "footnote", "pass", "stem", "latexmath", "asciimath",
+        "footnote", "pass", "stem", "latexmath", "asciimath", "anchor",
     ]
 
     private static let urlSchemes = ["https://", "http://", "ftp://", "irc://"]
@@ -140,6 +140,7 @@ public enum InlineParser {
                     || matchURL(in: characters, at: index + 1) != nil
                     || matchMacro(in: characters, at: index + 1) != nil
                     || matchAttributeReference(in: characters, at: index + 1) != nil
+                    || matchAnchor(in: characters, at: index + 1) != nil
 
                 if variants.keys.contains(next.character) || escapesMacro {
                     appendText(next)
@@ -153,6 +154,14 @@ public enum InlineParser {
             {
                 flushText()
                 inlines.append(.attributeReference(name: match.name, range: match.range))
+                index = match.next
+                continue
+            }
+
+            if current.character == "[", let match = matchAnchor(in: characters, at: index) {
+                flushText()
+                inlines.append(
+                    .anchor(id: match.id, reftext: match.reftext, range: match.range))
                 index = match.next
                 continue
             }
@@ -315,6 +324,53 @@ public enum InlineParser {
     }
 
     /// `name:target[attrlist]`, for a known name at a word boundary.
+    /// `[[id]]` or `[[id,reftext]]` — an inline anchor. Ids follow the same
+    /// shape references use; a bracket pair holding anything else — a
+    /// citation-looking `[[1]]` is fine, prose is not — stays text.
+    private static func matchAnchor(
+        in characters: ArraySlice<Positioned>, at index: Int
+    ) -> (id: String, reftext: String, range: SourceRange, next: Int)? {
+        guard matches("[[", in: characters, at: index) else {
+            return nil
+        }
+        var cursor = index + 2
+        var inner = ""
+
+        while cursor + 1 < characters.endIndex {
+            if characters[cursor].character == "]", characters[cursor + 1].character == "]" {
+                let comma = inner.firstIndex(of: ",")
+                let id = trimmed(comma.map { String(inner[inner.startIndex..<$0]) } ?? inner)
+                let reftext = trimmed(
+                    comma.map { String(inner[inner.index(after: $0)...]) } ?? "")
+                guard !id.isEmpty, id.allSatisfy(isIdentifier) else {
+                    return nil
+                }
+                return (
+                    id, reftext,
+                    SourceRange(
+                        start: characters[index].location,
+                        end: characters[cursor + 1].end
+                    ),
+                    cursor + 2
+                )
+            }
+            // An anchor never spans lines.
+            guard characters[cursor].character != "\n" else {
+                return nil
+            }
+            inner.append(characters[cursor].character)
+            cursor += 1
+        }
+        return nil
+    }
+
+    /// The characters an id may hold: the same set attribute names use, plus
+    /// the period and colon AsciiDoc allows inside ids.
+    private static func isIdentifier(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber || character == "_" || character == "-"
+            || character == "." || character == ":"
+    }
+
     /// `{name}` — an attribute reference. Names follow AsciiDoc's rules:
     /// they start with a letter, digit or underscore and continue with those
     /// plus hyphens; anything else (a brace in prose, `{ x }`) is ordinary

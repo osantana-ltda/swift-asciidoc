@@ -178,6 +178,9 @@ func rangesExtractFaithfully(_ source: String) {
                 #expect(extracted.count >= 2)
             case .attributeReference(let name, _):
                 #expect(extracted == "{\(name)}")
+            case .anchor(let id, _, _):
+                #expect(extracted.hasPrefix("[[\(id)"))
+                #expect(extracted.hasSuffix("]]"))
             }
         }
     }
@@ -387,4 +390,60 @@ extension Inline.Macro {
         return false
     }
     #expect(hasReference)
+}
+
+// MARK: - Inline anchors
+
+@Test func anInlineAnchorParses() {
+    let parsed = inlines("before [[the-spot]] after")
+
+    #expect(parsed.count == 3)
+    guard case .anchor(let id, let reftext, let range) = parsed[1] else {
+        Issue.record("expected an anchor")
+        return
+    }
+    #expect(id == "the-spot")
+    #expect(reftext.isEmpty)
+    #expect(range.start.offset == 7)
+    #expect(range.end.offset == 19)
+}
+
+@Test func anAnchorCarriesItsReferenceText() {
+    let parsed = inlines("[[fig.1,Figure 1]] shows it")
+
+    guard case .anchor(let id, let reftext, _) = parsed[0] else {
+        Issue.record("expected an anchor")
+        return
+    }
+    #expect(id == "fig.1")
+    #expect(reftext == "Figure 1")
+    #expect(parsed[0].plainText == "Figure 1")
+}
+
+@Test func bracketPairsAroundProseStayText() {
+    // A space, an empty pair, an unclosed one, a line break inside.
+    #expect(inlines("see [[not an id]] here").count == 1)
+    #expect(inlines("empty [[]] pair").count == 1)
+    #expect(inlines("unclosed [[id").count == 1)
+    #expect(inlines("split [[id\nacross]] lines").count == 1)
+}
+
+@Test func anEscapedAnchorIsLiteralText() {
+    let parsed = inlines("keep \\[[id]] literal")
+
+    #expect(parsed.count == 1)
+    #expect(parsed[0].plainText == "keep [[id]] literal")
+}
+
+@Test func theAnchorMacroFormParses() {
+    let parsed = inlines("here anchor:spot[] and on")
+
+    let anchors = parsed.compactMap { inline -> Inline.Macro? in
+        if case .macro(let macro) = inline, macro.name == "anchor" {
+            return macro
+        }
+        return nil
+    }
+    #expect(anchors.count == 1)
+    #expect(anchors[0].target == "spot")
 }

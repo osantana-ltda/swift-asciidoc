@@ -11,6 +11,10 @@ public enum Inline: Hashable, Sendable {
     /// reference, never the value: substitution is a rendering concern, and
     /// the source round-trips untouched.
     case attributeReference(name: String, range: SourceRange)
+    /// `[[id]]` or `[[id,reftext]]` — an inline anchor: a cross-reference
+    /// target sitting inside prose. The `anchor:id[]` macro form parses as
+    /// a macro instead, like every other `name:target[]`.
+    case anchor(id: String, reftext: String, range: SourceRange)
 
     /// An inline macro: `name:target[attrlist]`, a bare URL, or the `<<xref>>`
     /// shorthand — the last two normalised to `link` and `xref` macros.
@@ -76,6 +80,7 @@ public enum Inline: Hashable, Sendable {
         case .span(let span): span.range
         case .macro(let macro): macro.range
         case .attributeReference(_, let range): range
+        case .anchor(_, _, let range): range
         }
     }
 
@@ -89,6 +94,9 @@ public enum Inline: Hashable, Sendable {
         case .span(let span): span.inlines.map(\.plainText).joined()
         case .macro(let macro): macro.attributes.isEmpty ? macro.target : macro.attributes
         case .attributeReference(let name, _): "{\(name)}"
+        // An anchor marks a place; it contributes no prose of its own,
+        // beyond the reference text when one is given.
+        case .anchor(_, let reftext, _): reftext
         }
     }
 }
