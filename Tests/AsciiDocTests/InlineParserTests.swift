@@ -447,3 +447,44 @@ extension Inline.Macro {
     #expect(anchors.count == 1)
     #expect(anchors[0].target == "spot")
 }
+
+// MARK: - Macro attribute lists
+
+@Test func aMacroAttributeListReadsItsFields() {
+    let parsed = inlines("image:x.png[A logo,width=200,height=100]")
+
+    let image = try! #require(macro(parsed[0]))
+    // The raw string stays exactly as written — serialization depends on it.
+    #expect(image.attributes == "A logo,width=200,height=100")
+
+    let list = image.attributeList
+    #expect(list.positional == ["A logo"])
+    #expect(list.named["width"] == "200")
+    #expect(list.named["height"] == "100")
+    // A macro's first positional is its own argument, never a block style.
+    #expect(list.style == nil)
+}
+
+@Test func macroShorthandCarriesIdAndRoles() {
+    let parsed = inlines("link:https://x.io[#home.external.big]")
+
+    let list = try! #require(macro(parsed[0])).attributeList
+    #expect(list.id == "home")
+    #expect(list.roles == ["external", "big"])
+}
+
+@Test func quotedValuesSurviveTheirCommas() {
+    let parsed = inlines("image:x.png[Alt,title=\"One, two\"]")
+
+    let list = try! #require(macro(parsed[0])).attributeList
+    #expect(list.positional == ["Alt"])
+    #expect(list.named["title"] == "One, two")
+}
+
+@Test func namedRoleAndOptionsAggregate() {
+    let parsed = inlines("link:https://x.io[Text,role=\"a b\",opts=nofollow]")
+
+    let list = try! #require(macro(parsed[0])).attributeList
+    #expect(list.roles == ["a", "b"])
+    #expect(list.options == ["nofollow"])
+}

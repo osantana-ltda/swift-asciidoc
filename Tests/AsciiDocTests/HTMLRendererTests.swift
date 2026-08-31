@@ -106,3 +106,23 @@ private func html(_ source: String) -> String {
     let out = html("= T\n\nMind a < b & c > d.\n")
     #expect(out.contains("Mind a &lt; b &amp; c &gt; d."))
 }
+
+@Test func imagesCarryTheirParsedAttributes() {
+    let out = html("= T\n\nSee image:logo.png[The logo,width=200,height=100,title=Logo].\n")
+
+    #expect(out.contains("src=\"logo.png\""))
+    #expect(out.contains("alt=\"The logo\""))
+    #expect(out.contains("width=\"200\""))
+    #expect(out.contains("height=\"100\""))
+    #expect(out.contains("title=\"Logo\""))
+}
+
+@Test func linkRolesBecomeClassesAndWindowsOpenSafely() {
+    let out = html(
+        "= T\n\nGo link:https://x.io[Out,role=external,window=_blank] now.\n")
+
+    #expect(out.contains("class=\"external\""))
+    #expect(out.contains("target=\"_blank\""))
+    #expect(out.contains("rel=\"noopener\""))
+    #expect(out.contains(">Out</a>"))
+}

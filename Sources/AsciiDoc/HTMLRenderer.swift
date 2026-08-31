@@ -187,13 +187,34 @@ public enum HTMLRenderer {
         case .macro(let macro):
             switch macro.name {
             case "link", "mailto":
+                let list = macro.attributeList
                 let target = macro.name == "mailto" ? "mailto:\(macro.target)" : macro.target
-                let label = macro.attributes.isEmpty ? macro.target : macro.attributes
-                return "<a href=\"\(escapeAttribute(target))\">\(escape(label))</a>"
+                let label = list.positional.first ?? macro.target
+                var attributes = " href=\"\(escapeAttribute(target))\""
+                attributes += htmlAttributes(id: list.id, roles: list.roles)
+                // `window=_blank` is AsciiDoc's way of asking for a new tab;
+                // the `noopener` that should accompany it comes along.
+                if let window = list.named["window"] {
+                    attributes += " target=\"\(escapeAttribute(window))\""
+                    attributes += " rel=\"noopener\""
+                }
+                return "<a\(attributes)>\(escape(label))</a>"
             case "image":
-                let alt = macro.attributes.isEmpty ? macro.target : macro.attributes
-                return
-                    "<img src=\"\(escapeAttribute(macro.target))\" alt=\"\(escapeAttribute(alt))\">"
+                let list = macro.attributeList
+                let alt = list.positional.first ?? macro.target
+                var attributes = " src=\"\(escapeAttribute(macro.target))\""
+                attributes += " alt=\"\(escapeAttribute(alt))\""
+                if let width = list.named["width"] {
+                    attributes += " width=\"\(escapeAttribute(width))\""
+                }
+                if let height = list.named["height"] {
+                    attributes += " height=\"\(escapeAttribute(height))\""
+                }
+                if let title = list.named["title"] {
+                    attributes += " title=\"\(escapeAttribute(title))\""
+                }
+                attributes += htmlAttributes(id: list.id, roles: list.roles)
+                return "<img\(attributes)>"
             case "kbd":
                 return
                     "<kbd>\(escape(macro.target.isEmpty ? macro.attributes : macro.target))</kbd>"
@@ -229,6 +250,19 @@ public enum HTMLRenderer {
             text = String(trimmed.dropFirst(marker.count + 1))
         }
         return ([text] + lines.dropFirst().map(\.text)).joined(separator: "\n")
+    }
+
+    /// The id and roles of an attribute list as HTML attributes — roles are
+    /// AsciiDoc's classes, and they carry that meaning straight across.
+    static func htmlAttributes(id: String?, roles: [String]) -> String {
+        var rendered = ""
+        if let id, !id.isEmpty {
+            rendered += " id=\"\(escapeAttribute(id))\""
+        }
+        if !roles.isEmpty {
+            rendered += " class=\"\(escapeAttribute(roles.joined(separator: " ")))\""
+        }
+        return rendered
     }
 
     public static func escape(_ text: String) -> String {

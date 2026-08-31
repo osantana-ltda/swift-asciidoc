@@ -23,8 +23,9 @@ public enum Inline: Hashable, Sendable {
         /// Between the colon and the bracket; the URL itself for links, empty
         /// for macros like `footnote:[...]` and `kbd:[...]`.
         public var target: String
-        /// The raw attribute list between the brackets, unparsed. Splitting it
-        /// into positional and named attributes is recorded as not done yet.
+        /// The raw attribute list between the brackets, exactly as written.
+        /// This stays the source of truth — serialization writes it back
+        /// untouched; `attributeList` is the *reading* of it.
         public var attributes: String
         /// The whole macro, name through closing bracket.
         public var range: SourceRange
@@ -34,6 +35,20 @@ public enum Inline: Hashable, Sendable {
             self.target = target
             self.attributes = attributes
             self.range = range
+        }
+
+        /// The attribute list read as fields: positional arguments, named
+        /// values, and the `#id.role%option` shorthand. Computed on demand
+        /// so the raw string remains the only stored form.
+        ///
+        /// Not meaningful for every macro: `xref` and a bracketed URL carry
+        /// reference text here, not an attribute list, and their readers
+        /// should use `attributes` directly.
+        public var attributeList: BlockAttributes {
+            var parsed = BlockAttributes(range: range)
+            AttributeListParser.parse(
+                body: attributes, into: &parsed, firstPositionalIsStyle: false)
+            return parsed
         }
     }
 

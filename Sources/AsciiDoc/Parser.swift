@@ -919,6 +919,18 @@ enum AttributeListParser {
             return attributes
         }
 
+        parse(body: body, into: &attributes, firstPositionalIsStyle: true)
+        return attributes
+    }
+
+    /// Parses the fields of an attribute list — the part between the
+    /// brackets. Inline macros share this with block attribute lines: same
+    /// syntax, same shorthand, same quoting. They differ in one reading
+    /// only: a macro's first positional is its own argument (a link's text,
+    /// an image's alt), never a block style.
+    static func parse(
+        body: String, into attributes: inout BlockAttributes, firstPositionalIsStyle: Bool
+    ) {
         for (position, field) in split(body).enumerated() {
             let trimmed = field.trimmingCharactersInWhitespace
 
@@ -968,13 +980,11 @@ enum AttributeListParser {
 
             if !positional.isEmpty {
                 attributes.positional.append(positional)
-                if position == 0 {
+                if position == 0, firstPositionalIsStyle {
                     attributes.style = positional
                 }
             }
         }
-
-        return attributes
     }
 
     /// Splits on commas outside quotes.
