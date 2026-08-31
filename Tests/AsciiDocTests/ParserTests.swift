@@ -518,6 +518,114 @@ import Testing
     #expect(row.blocks.map(\.text) == ["a | b", "c"])
 }
 
+// MARK: - Delimiter-separated tables
+
+@Test func aCommaDelimiterMakesEveryLineACsvRow() {
+    let document = Parser.parse(
+        """
+        ,===
+        Name,Role
+        Ada,Analyst
+        ,===
+        """
+    )
+
+    let table = document.blocks[0]
+    #expect(table.kind == .table)
+    #expect(table.blocks.count == 2)
+    #expect(table.blocks[0].blocks.map(\.text) == ["Name", "Role"])
+    #expect(table.blocks[1].blocks.map(\.text) == ["Ada", "Analyst"])
+}
+
+@Test func quotedCsvFieldsKeepTheirSeparatorsAndQuotes() {
+    // Written flat: the source holds a run of three quotes, which a Swift
+    // multi-line literal cannot carry.
+    let document = Parser.parse(",===\na,\"b,c\",\"say \"\"hi\"\"\"\n,===\n")
+
+    let row = document.blocks[0].blocks[0]
+    #expect(row.blocks.map(\.text) == ["a", "b,c", "say \"hi\""])
+}
+
+@Test func aColonDelimiterMakesADsvTableWithEscapableSeparators() {
+    let document = Parser.parse(
+        """
+        :===
+        key:value
+        a\\:b:plain
+        :===
+        """
+    )
+
+    let table = document.blocks[0]
+    #expect(table.blocks[0].blocks.map(\.text) == ["key", "value"])
+    #expect(table.blocks[1].blocks.map(\.text) == ["a:b", "plain"])
+}
+
+@Test func theFormatAttributeOverridesThePipeDelimiter() {
+    let document = Parser.parse(
+        """
+        [format=csv]
+        |===
+        one,two
+        |===
+        """
+    )
+
+    #expect(document.blocks[0].blocks[0].blocks.map(\.text) == ["one", "two"])
+}
+
+@Test func aChosenSeparatorReplacesTheFormatsOwn() {
+    let document = Parser.parse(
+        """
+        [format=dsv,separator=;]
+        |===
+        one;two
+        |===
+        """
+    )
+
+    #expect(document.blocks[0].blocks[0].blocks.map(\.text) == ["one", "two"])
+}
+
+@Test func csvHeadersFollowTheSameBlankLineRule() {
+    let document = Parser.parse(
+        """
+        ,===
+        Name,Role
+
+        Ada,Analyst
+        ,===
+        """
+    )
+
+    let table = document.blocks[0]
+    #expect(table.blocks[0].kind == .tableRow(header: true))
+    #expect(table.blocks[1].kind == .tableRow(header: false))
+}
+
+@Test func separatedCellsCarryExactRanges() {
+    let source = """
+        ,===
+        alpha, "b,c" ,gamma
+        ,===
+        """
+    let document = Parser.parse(source)
+    let text = source as NSString
+
+    // The range covers the field as written — quotes included — so it stays
+    // exact even where the decoded text is shorter.
+    let written = document.blocks[0].blocks[0].blocks.map { cell in
+        text.substring(
+            with: NSRange(
+                location: cell.range.start.offset,
+                length: cell.range.end.offset - cell.range.start.offset
+            )
+        )
+    }
+
+    #expect(written == ["alpha", "\"b,c\"", "gamma"])
+}
+
 @Test func tableCellsCarryExactRanges() {
     let source = """
         |===

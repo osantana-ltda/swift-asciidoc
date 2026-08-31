@@ -21,7 +21,10 @@
 /// them. Spans lay the grid out: a cell that spans two columns consumes two,
 /// and a cell that spans two rows keeps its columns occupied in the next.
 ///
-/// The csv and dsv table flavours are still not interpreted.
+/// Delimiter-separated flavours — `,===`, `:===`, or `|===` carrying
+/// `format=csv|dsv|tsv` — split on their separator instead, one row per line.
+/// They have no cell specifiers and no continuation lines: every line is a
+/// full row, which is the point of writing a table that way.
 enum TableParser {
     /// Where a parsed specifier lands on the cell's attributes. The style
     /// letter uses `attributes.style`, which is what that field means.
@@ -32,15 +35,22 @@ enum TableParser {
         public static let verticalAlign = "valign"
     }
 
-    static func rows(of lines: [SourceLine], attributes: BlockAttributes) -> [Block] {
+    static func rows(
+        of lines: [SourceLine], attributes: BlockAttributes, delimiter: String = "|==="
+    ) -> [Block] {
         let content = lines.drop { $0.isBlank }
         guard let first = content.first else {
             return []
         }
 
+        let format = Format.resolve(attributes: attributes, delimiter: delimiter)
+        let split = { (line: SourceLine) in
+            format.isPipeSeparated ? cells(of: line) : separatedCells(of: line, format: format)
+        }
+
         let columns =
             attributes.named["cols"].map(columnCount(from:))
-            ?? max(cells(of: first).count, 1)
+            ?? max(split(first).count, 1)
 
         let headerByOption = attributes.options.contains("header")
         let headerByBlank = content.dropFirst().first?.isBlank ?? false
@@ -51,7 +61,7 @@ enum TableParser {
                 continue
             }
 
-            let segments = cells(of: line)
+            let segments = split(line)
             if segments.isEmpty {
                 // No marker at all: the line continues the previous cell.
                 if let last = all.last {
@@ -63,6 +73,64 @@ enum TableParser {
         }
 
         return grid(of: all, columns: columns, header: headerByOption || headerByBlank)
+    }
+
+    // MARK: - Flavours
+
+    /// How a table's lines break into cells. Only `psv` reads specifiers and
+    /// pools cells across lines; the rest are one row per line.
+    struct Format: Equatable {
+        var separator: Character
+        var isQuoted: Bool
+
+        var isPipeSeparated: Bool {
+            separator == "|" && !isQuoted
+        }
+
+        static let psv = Format(separator: "|", isQuoted: false)
+        static let csv = Format(separator: ",", isQuoted: true)
+        static let dsv = Format(separator: ":", isQuoted: false)
+        static let tsv = Format(separator: "\t", isQuoted: false)
+
+        static func resolve(attributes: BlockAttributes, delimiter: String) -> Format {
+            var format = named(attributes.named["format"]) ?? implied(delimiter)
+            if let separator = attributes.named["separator"],
+                let character = separated(separator)
+            {
+                format.separator = character
+            }
+            return format
+        }
+
+        private static func named(_ format: String?) -> Format? {
+            switch format {
+            case "psv": return .psv
+            case "csv": return .csv
+            case "dsv": return .dsv
+            case "tsv": return .tsv
+            default: return nil
+            }
+        }
+
+        private static func implied(_ delimiter: String) -> Format {
+            switch delimiter {
+            case ",===": return .csv
+            case ":===": return .dsv
+            default: return .psv
+            }
+        }
+
+        /// `separator=;` names a character; `separator=\t` names a tab, since
+        /// a literal one cannot be written inside an attribute list.
+        private static func separated(_ value: String) -> Character? {
+            if value == "\\t" {
+                return "\t"
+            }
+            guard value.count == 1 else {
+                return nil
+            }
+            return value.first
+        }
     }
 
     /// Lays the pooled cells into rows, honouring spans: a cell claims
@@ -334,6 +402,116 @@ enum TableParser {
         close(beforePipe: false, nextSpec: &unused)
 
         return cells
+    }
+
+    /// Splits one line of a delimiter-separated table into cells. Every line
+    /// is a whole row here, so text before the first separator is a cell like
+    /// any other and a line without separators is a one-cell row.
+    private static func separatedCells(of line: SourceLine, format: Format) -> [Block] {
+        var cells: [Block] = []
+        var raw = ""
+        // Column (1-based, UTF-16) where the current field's raw text begins.
+        var start = 1
+        var column = 1
+        var quoting = false
+        var escaped = false
+
+        for character in line.text {
+            let width = String(character).utf16.count
+            if escaped {
+                raw.append(character)
+                escaped = false
+            } else if character == "\\" && !format.isQuoted {
+                raw.append(character)
+                escaped = true
+            } else if character == "\"" && format.isQuoted {
+                quoting.toggle()
+                raw.append(character)
+            } else if character == format.separator && !quoting {
+                cells.append(cell(field: raw, in: line, startColumn: start, format: format))
+                raw = ""
+                start = column + width
+            } else {
+                raw.append(character)
+            }
+            column += width
+        }
+        cells.append(cell(field: raw, in: line, startColumn: start, format: format))
+
+        return cells
+    }
+
+    private static func cell(
+        field raw: String, in line: SourceLine, startColumn: Int, format: Format
+    ) -> Block {
+        let leading = raw.prefix { $0 == " " || $0 == "\t" }.count
+        var field = raw.dropFirst(leading)
+        while let last = field.last, last == " " || last == "\t" {
+            field = field.dropLast()
+        }
+
+        // The range covers the field as written, quotes and escapes included,
+        // so it stays exact even where the decoded text is shorter.
+        let column = startColumn + leading
+        let offset = line.range.start.offset + column - 1
+        let range = SourceRange(
+            start: SourceLocation(offset: offset, line: line.number, column: column),
+            end: SourceLocation(
+                offset: offset + field.utf16.count,
+                line: line.number,
+                column: column + field.utf16.count
+            )
+        )
+
+        return Block(
+            kind: .tableCell,
+            range: range,
+            lines: [
+                SourceLine(
+                    text: decode(field, format: format), range: range, number: line.number)
+            ]
+        )
+    }
+
+    /// csv wraps a field holding the separator in quotes, doubling any quote
+    /// inside it; dsv escapes the separator with a backslash instead.
+    private static func decode(_ field: some StringProtocol, format: Format) -> String {
+        guard !format.isQuoted else {
+            guard field.count >= 2, field.first == "\"", field.last == "\"" else {
+                return String(field)
+            }
+            return undoubled(field.dropFirst().dropLast())
+        }
+
+        var text = ""
+        var escaped = false
+        for character in field {
+            if escaped {
+                text.append(character)
+                escaped = false
+                continue
+            }
+            if character == "\\" {
+                escaped = true
+                continue
+            }
+            text.append(character)
+        }
+        return text
+    }
+
+    private static func undoubled(_ body: some StringProtocol) -> String {
+        var text = ""
+        var pending = false
+        for character in body {
+            if character == "\"" && !pending {
+                pending = true
+                continue
+            }
+            text.append(character)
+            pending = false
+        }
+        return text
     }
 
     private static func cell(

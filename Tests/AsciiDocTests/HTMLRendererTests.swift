@@ -80,6 +80,14 @@ private func html(_ source: String) -> String {
     #expect(out.contains("</table>"))
 }
 
+@Test func csvTablesRenderLikeAnyOther() {
+    let out = html("= T\n\n,===\nName,Role\n\nAda,\"Analyst, senior\"\n,===\n")
+
+    #expect(out.contains("<th>Name</th>"))
+    #expect(out.contains("<td>Ada</td>"))
+    #expect(out.contains("<td>Analyst, senior</td>"))
+}
+
 @Test func commentsAndAttributeEntriesLeaveNoTrace() {
     let out = html("= T\n:toc: left\n\n// a note to authors\n\nVisible.\n")
     #expect(!out.contains("note to authors"))

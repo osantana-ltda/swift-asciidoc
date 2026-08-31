@@ -295,7 +295,9 @@ extension Parser {
                 return metadata.finish(
                     kind: .table,
                     range: range,
-                    blocks: TableParser.rows(of: content, attributes: metadata.attributes),
+                    blocks: TableParser.rows(
+                        of: content, attributes: metadata.attributes,
+                        delimiter: delimiter.text),
                     lines: content,
                     opening: opening,
                     closing: closing
@@ -789,8 +791,11 @@ extension Parser {
             guard let first = trimmed.first, trimmed.count >= 4,
                 trimmed.allSatisfy({ $0 == first })
             else {
-                if trimmed.hasPrefix("|===") {
-                    text = "|==="
+                // `|===` is the usual table; `,===` and `:===` are the same
+                // block with their format implied by the delimiter itself.
+                for marker in ["|===", ",===", ":==="]
+                where trimmed.hasPrefix(marker) {
+                    text = marker
                     kind = .table
                     isCompound = false
                     return
@@ -838,8 +843,8 @@ extension Parser {
             if text == "--" {
                 return trimmed == "--"
             }
-            if text == "|===" {
-                return trimmed == "|==="
+            if kind == .table {
+                return trimmed == text
             }
 
             return trimmed.count >= 4 && trimmed.allSatisfy { $0 == first }

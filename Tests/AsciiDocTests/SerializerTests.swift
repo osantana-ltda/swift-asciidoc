@@ -63,6 +63,10 @@ private let roundTripSources: [String] = [
     "|===\n| h1 | h2\n\n| a | b\n|===\n",
     "[cols=\"1,2\"]\n|===\n| a | b | c | d\n|===\n",
     "|===\n| a \\| pipe | c\n|===\n",
+    // Delimiter-separated tables: csv with quotes, dsv with an escape.
+    ",===\nName,Role\n\nAda,\"b,c\"\n,===\n",
+    ":===\nkey:value\na\\:b:plain\n:===\n",
+    "[format=csv,separator=;]\n|===\none;two\n|===\n",
     // Attribute entry in the body.\n
     "Body.\n\n:name: value\n\nMore body.\n",
     // Attribute references: defined, unknown and escaped all stay verbatim.
