@@ -126,3 +126,44 @@ private func html(_ source: String) -> String {
     #expect(out.contains("rel=\"noopener\""))
     #expect(out.contains(">Out</a>"))
 }
+
+// MARK: - Block titles
+
+@Test func blockTitlesReachThePage() {
+    let out = html(
+        "= T\n\n.A listing caption\n[source,swift]\n----\nlet x = 1\n----\n\n"
+            + ".A quoted thought\n____\nWords.\n____\n")
+
+    #expect(out.contains("<div class=\"title\">A listing caption</div>"))
+    #expect(out.contains("<div class=\"title\">A quoted thought</div>"))
+    // The title precedes the block it names.
+    let title = out.range(of: "A listing caption")!
+    let code = out.range(of: "let x = 1")!
+    #expect(title.lowerBound < code.lowerBound)
+}
+
+@Test func aTableTitleBecomesItsCaption() {
+    let out = html("= T\n\n.Results by year\n|===\n| a | b\n|===\n")
+
+    #expect(out.contains("<table>\n<caption>Results by year</caption>"))
+    // Never both: the caption is the table's title, not a sibling div.
+    #expect(!out.contains("<div class=\"title\">Results by year</div>"))
+}
+
+@Test func titlesCarryInlineFormattingAndReferences() {
+    let out = html(
+        "= T\n:product: Bookled\n\n.The *bold* {product} caption\n____\nWords.\n____\n")
+
+    #expect(out.contains("<div class=\"title\">The <strong>bold</strong> Bookled caption</div>"))
+}
+
+@Test func theDocumentTitleIsInlineParsedToo() {
+    let out = html("= The *Bold* Book\n\nText.\n")
+    #expect(out.contains("<h1>The <strong>Bold</strong> Book</h1>"))
+}
+
+@Test func untitledBlocksKeepTheirExactShape() {
+    let out = html("= T\n\n____\nWords.\n____\n")
+    #expect(out.contains("<blockquote><p>Words.</p>\n</blockquote>"))
+    #expect(!out.contains("class=\"title\""))
+}

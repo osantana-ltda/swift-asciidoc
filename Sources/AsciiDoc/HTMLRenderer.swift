@@ -20,7 +20,7 @@ public enum HTMLRenderer {
         var html = ""
         if let header = document.header {
             if let title = header.title {
-                html += "<h1>\(escape(title.text))</h1>\n"
+                html += "<h1>\(inlineHTML(of: title.text, attributes: attributes))</h1>\n"
             }
             if let author = header.authorLine {
                 html += "<p class=\"author\">\(escape(author))</p>\n"
@@ -35,6 +35,32 @@ public enum HTMLRenderer {
     }
 
     static func render(_ block: Block, attributes: [String: String] = [:]) -> String {
+        // A block's `.Title` line is content, not decoration: it names a
+        // listing, captions a figure, titles a table. It was reaching the
+        // model and stopping there; now it reaches the page, inline
+        // formatting and attribute references included.
+        let titled = title(of: block, attributes: attributes)
+        return titled + body(of: block, attributes: attributes)
+    }
+
+    /// The block's own title as markup, empty when it has none. Tables are
+    /// the exception: HTML wants their caption *inside* the table, so
+    /// `body(of:)` places it.
+    static func title(of block: Block, attributes: [String: String]) -> String {
+        guard let title = block.title, !isSection(block.kind), block.kind != .table else {
+            return ""
+        }
+        return "<div class=\"title\">\(inlineHTML(of: title.text, attributes: attributes))</div>\n"
+    }
+
+    static func isSection(_ kind: Block.Kind) -> Bool {
+        if case .section = kind {
+            return true
+        }
+        return false
+    }
+
+    static func body(of block: Block, attributes: [String: String] = [:]) -> String {
         switch block.kind {
         case .section(let level):
             // AsciiDoc levels: `=` is the document title (h1), `==` is
@@ -100,7 +126,13 @@ public enum HTMLRenderer {
             return block.text + "\n"
 
         case .table:
-            return "<table>\n\(render(block.blocks, attributes: attributes))</table>\n"
+            // HTML puts a table's caption inside the table, first.
+            let caption =
+                block.title.map { title in
+                    "<caption>\(inlineHTML(of: title.text, attributes: attributes))</caption>\n"
+                } ?? ""
+            return
+                "<table>\n\(caption)\(render(block.blocks, attributes: attributes))</table>\n"
 
         case .tableRow(let header):
             let cell = header ? "th" : "td"
