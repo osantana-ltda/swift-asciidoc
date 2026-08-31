@@ -18,6 +18,21 @@ private func html(_ source: String) -> String {
     #expect(out.contains("<p>Text.</p>"))
 }
 
+@Test func authorsRenderIndividuallyWithTheirAddresses() {
+    let out = html("= Book\nAda Lovelace <ada@x.io>; Alan Turing\n\nText.\n")
+
+    #expect(out.contains("<a href=\"mailto:ada@x.io\">Ada Lovelace</a>"))
+    #expect(out.contains("Alan Turing"))
+    // One author paragraph, the two names inside it.
+    #expect(out.components(separatedBy: "class=\"author\"").count == 2)
+}
+
+@Test func derivedAuthorAttributesResolveInTheBody() {
+    let out = html("= Book\nAda Lovelace <ada@x.io>\n\nBy {author}, reachable at {email}.\n")
+
+    #expect(out.contains("By Ada Lovelace, reachable at ada@x.io."))
+}
+
 @Test func inlineFormattingRenders() {
     let out = html("= T\n\nSome *bold*, _italic_ and `mono` text.\n")
     #expect(out.contains("<strong>bold</strong>"))

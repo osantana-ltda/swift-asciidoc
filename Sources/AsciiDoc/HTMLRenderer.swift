@@ -22,7 +22,20 @@ public enum HTMLRenderer {
             if let title = header.title {
                 html += "<h1>\(inlineHTML(of: title.text, attributes: attributes))</h1>\n"
             }
-            if let author = header.authorLine {
+            // Authors are named one by one, an address becoming a link —
+            // the reading of the author line, not the line itself (§6).
+            let authors = header.authors
+            if !authors.isEmpty {
+                let names = authors.map { author -> String in
+                    let name = escape(author.fullName)
+                    guard let email = author.email, !email.isEmpty else {
+                        return name
+                    }
+                    let label = name.isEmpty ? escape(email) : name
+                    return "<a href=\"mailto:\(escapeAttribute(email))\">\(label)</a>"
+                }
+                html += "<p class=\"author\">\(names.joined(separator: ", "))</p>\n"
+            } else if let author = header.authorLine {
                 html += "<p class=\"author\">\(escape(author))</p>\n"
             }
         }

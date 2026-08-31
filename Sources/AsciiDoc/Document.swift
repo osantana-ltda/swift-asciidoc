@@ -52,15 +52,50 @@ public struct Document: Hashable, Sendable {
         self.sourceLength = sourceLength
     }
 
-    /// Document attributes declared in the header, by name.
+    /// Document attributes by name: those the header declares, over the ones
+    /// AsciiDoc derives from the author line (`{author}`, `{email}`,
+    /// `{firstname}` and their numbered forms). A declared entry wins, since
+    /// writing `:author:` is how an author line is overridden.
     public var attributes: [String: String] {
         guard let header else {
             return [:]
         }
-        return Dictionary(
-            header.attributes.map { ($0.name, $0.value) },
-            uniquingKeysWith: { _, last in last }
-        )
+        var derived = authorAttributes(of: header)
+        for entry in header.attributes {
+            derived[entry.name] = entry.value
+        }
+        return derived
+    }
+
+    private func authorAttributes(of header: DocumentHeader) -> [String: String] {
+        let authors = header.authors
+        guard !authors.isEmpty else {
+            return [:]
+        }
+
+        var attributes: [String: String] = ["authorcount": String(authors.count)]
+
+        func record(_ author: Author, suffix: String) {
+            attributes["author\(suffix)"] = author.fullName
+            attributes["firstname\(suffix)"] = author.firstName
+            attributes["authorinitials\(suffix)"] = author.initials
+            if let middle = author.middleName {
+                attributes["middlename\(suffix)"] = middle
+            }
+            if let last = author.lastName {
+                attributes["lastname\(suffix)"] = last
+            }
+            if let email = author.email {
+                attributes["email\(suffix)"] = email
+            }
+        }
+
+        // The first author also answers to the unnumbered names.
+        record(authors[0], suffix: "")
+        for (index, author) in authors.enumerated() {
+            record(author, suffix: "_\(index + 1)")
+        }
+        return attributes
     }
 }
 
@@ -70,8 +105,8 @@ public struct DocumentHeader: Hashable, Sendable {
     public var title: Title?
     /// The whole `= Title` line, marker included.
     public var titleRange: SourceRange?
-    /// The author line, unparsed. Splitting it into names and addresses is
-    /// deferred; see the package's documented limitations.
+    /// The author line exactly as written — the stored, authoritative form.
+    /// `authors` is the reading of it.
     public var authorLine: String?
     public var attributes: [AttributeEntry]
     public var range: SourceRange
@@ -93,6 +128,12 @@ public struct DocumentHeader: Hashable, Sendable {
         self.attributes = attributes
         self.range = range
         self.lines = lines
+    }
+
+    /// The author line read into names and addresses (§6). Computed, so the
+    /// line itself remains the only stored form.
+    public var authors: [Author] {
+        authorLine.map(Author.parse(line:)) ?? []
     }
 }
 

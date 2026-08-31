@@ -21,6 +21,8 @@ private let roundTripSources: [String] = [
     "Gap of three\n\n\n\nparagraphs apart.\n",
     // Header forms.
     "= Title\nAuthor Name <a@b.c>\n:toc: left\n:sectnums!:\n\nBody.\n",
+    // Several authors, an underscore standing for a space inside a name.
+    "= Title\nAna_Maria Silva <ana@x.io>; Alan Turing\n\nBody.\n",
     "= Just A Title\n\nBody.\n",
     ":attr: value\n:other: thing\n\nBody.\n",
     // Sections, nesting, preamble.
