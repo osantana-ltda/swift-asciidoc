@@ -135,14 +135,13 @@ public enum HTMLRenderer {
                 "<table>\n\(caption)\(render(block.blocks, attributes: attributes))</table>\n"
 
         case .tableRow(let header):
-            let cell = header ? "th" : "td"
             let cells = block.blocks.map { child in
-                "<\(cell)>\(inlineHTML(of: child.lines, attributes: attributes))</\(cell)>"
+                tableCell(child, inHeaderRow: header, attributes: attributes)
             }.joined()
             return "<tr>\(cells)</tr>\n"
 
         case .tableCell:
-            return "<td>\(inlineHTML(of: block.lines, attributes: attributes))</td>\n"
+            return tableCell(block, inHeaderRow: false, attributes: attributes)
 
         case .unorderedList:
             return "<ul>\n\(render(block.blocks, attributes: attributes))</ul>\n"
@@ -162,6 +161,52 @@ public enum HTMLRenderer {
         case .unparsed:
             return "<pre class=\"unparsed\">\(escape(block.text))</pre>\n"
         }
+    }
+
+    /// One cell, wearing its specifier: spans become attributes, alignments
+    /// become inline styles, `h` makes a header cell wherever it appears, and
+    /// `a` means the content is AsciiDoc in its own right — a list or a
+    /// listing inside a cell — so it is parsed rather than read as inlines.
+    static func tableCell(
+        _ cell: Block, inHeaderRow: Bool, attributes: [String: String]
+    ) -> String {
+        let style = cell.attributes.style
+        let element = (style == "h" || inHeaderRow) ? "th" : "td"
+
+        var markup = ""
+        if let colspan = cell.attributes.named[TableParser.AttributeKey.colspan] {
+            markup += " colspan=\"\(escapeAttribute(colspan))\""
+        }
+        if let rowspan = cell.attributes.named[TableParser.AttributeKey.rowspan] {
+            markup += " rowspan=\"\(escapeAttribute(rowspan))\""
+        }
+        var css = ""
+        if let align = cell.attributes.named[TableParser.AttributeKey.horizontalAlign] {
+            css += "text-align:\(align);"
+        }
+        if let align = cell.attributes.named[TableParser.AttributeKey.verticalAlign] {
+            css += "vertical-align:\(align);"
+        }
+        if !css.isEmpty {
+            markup += " style=\"\(escapeAttribute(css))\""
+        }
+
+        let text = cell.lines.map(\.text).joined(separator: "\n")
+        let content: String
+        switch style {
+        case "a":
+            content = render(Parser.parse(text).blocks, attributes: attributes)
+        case "l", "v":
+            content = "<pre>\(escape(text))</pre>"
+        case "m":
+            content = "<code>\(escape(text))</code>"
+        case "s":
+            content = "<strong>\(inlineHTML(of: cell.lines, attributes: attributes))</strong>"
+        default:
+            content = inlineHTML(of: cell.lines, attributes: attributes)
+        }
+
+        return "<\(element)\(markup)>\(content)</\(element)>"
     }
 
     // MARK: - Inlines

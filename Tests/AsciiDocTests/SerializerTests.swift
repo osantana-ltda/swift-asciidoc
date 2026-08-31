@@ -67,6 +67,9 @@ private let roundTripSources: [String] = [
     "= T\n:product: Bookled\n\nBuilt with {product}, not {unknown} or \\{escaped}.\n",
     // Inline anchors, their reference text, and cross-references to them.
     "Mark [[spot]] and [[fig.1,Figure 1]] here.\n\nSee <<spot>> or \\[[escaped]].\n",
+    // Table cell specifiers: spans, repeats, alignments, styles.
+    "|===\n| a | b\n2+| wide\n.2+| tall | first\n| second\n3*| same\n|===\n",
+    "|===\n| a | b\n^| centred | >.^m| right\nh| head | a| * list\n|===\n",
     // Trailing shapes.
     "No trailing newline",
     "Trailing blanks.\n\n\n",

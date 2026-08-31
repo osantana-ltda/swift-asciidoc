@@ -327,6 +327,121 @@ import Testing
     #expect(table.blocks[1].blocks.map(\.text) == ["c", "d"])
 }
 
+@Test func cellSpecifiersParseTheirParts() {
+    // Spans, repeats, alignments and styles, alone and combined.
+    #expect(TableParser.specifier("2+")?.colspan == 2)
+    #expect(TableParser.specifier(".3+")?.rowspan == 3)
+    let both = TableParser.specifier("2.3+")
+    #expect(both?.colspan == 2)
+    #expect(both?.rowspan == 3)
+    #expect(TableParser.specifier("3*")?.repeatCount == 3)
+    #expect(TableParser.specifier("a")?.style == "a")
+    #expect(TableParser.specifier("^")?.horizontal == "center")
+    #expect(TableParser.specifier(">")?.horizontal == "right")
+    #expect(TableParser.specifier(".^")?.vertical == "center")
+    let mixed = TableParser.specifier("2+^.>m")
+    #expect(mixed?.colspan == 2)
+    #expect(mixed?.horizontal == "center")
+    #expect(mixed?.vertical == "right")
+    #expect(mixed?.style == "m")
+}
+
+@Test func ordinaryTextIsNotASpecifier() {
+    // The parts must appear in order, digits need their span marker, and
+    // anything left over disqualifies the whole token.
+    #expect(TableParser.specifier("") == nil)
+    #expect(TableParser.specifier("2") == nil)
+    #expect(TableParser.specifier("item") == nil)
+    #expect(TableParser.specifier("a2+") == nil)
+    #expect(TableParser.specifier("+2") == nil)
+}
+
+@Test func aSpecifierBindsToTheCellAfterIt() {
+    let document = Parser.parse(
+        """
+        |===
+        | plain | 2+| spans two
+        |===
+        """
+    )
+
+    let cells = document.blocks[0].blocks[0].blocks
+    #expect(cells.map(\.text) == ["plain", "spans two"])
+    #expect(cells[0].attributes.named["colspan"] == nil)
+    #expect(cells[1].attributes.named["colspan"] == "2")
+}
+
+@Test func cellTextEndingInASpecifierLetterSurvives() {
+    // `d` and `a` are style letters; at the end of a line, and separated
+    // from the next `|` by a space, they are ordinary content.
+    let document = Parser.parse(
+        """
+        |===
+        | c | d
+        | item a | next
+        |===
+        """
+    )
+
+    let rows = document.blocks[0].blocks
+    #expect(rows[0].blocks.map(\.text) == ["c", "d"])
+    #expect(rows[1].blocks.map(\.text) == ["item a", "next"])
+}
+
+@Test func spansLayOutTheGrid() {
+    // The spanning cell claims both columns of its row, so the next row
+    // starts fresh rather than inheriting a stray cell.
+    let document = Parser.parse(
+        """
+        |===
+        | a | b
+        2+| wide
+        | c | d
+        |===
+        """
+    )
+
+    let rows = document.blocks[0].blocks
+    #expect(rows.count == 3)
+    #expect(rows[0].blocks.map(\.text) == ["a", "b"])
+    #expect(rows[1].blocks.map(\.text) == ["wide"])
+    #expect(rows[2].blocks.map(\.text) == ["c", "d"])
+}
+
+@Test func aRowSpanKeepsItsColumnOccupied() {
+    // The tall cell holds column one for the second row, which therefore
+    // takes a single cell.
+    let document = Parser.parse(
+        """
+        |===
+        .2+| tall | first
+        | second
+        | a | b
+        |===
+        """
+    )
+
+    let rows = document.blocks[0].blocks
+    #expect(rows[0].blocks.map(\.text) == ["tall", "first"])
+    #expect(rows[1].blocks.map(\.text) == ["second"])
+    #expect(rows[2].blocks.map(\.text) == ["a", "b"])
+}
+
+@Test func aRepeatSpecifierDuplicatesItsCell() {
+    let document = Parser.parse(
+        """
+        |===
+        | a | b
+        3*| same
+        |===
+        """
+    )
+
+    let rows = document.blocks[0].blocks
+    #expect(rows[1].blocks.map(\.text) == ["same", "same"])
+    #expect(rows[2].blocks.map(\.text) == ["same"])
+}
+
 @Test func aBlankLineAfterTheFirstRowMakesItTheHead() {
     let document = Parser.parse(
         """

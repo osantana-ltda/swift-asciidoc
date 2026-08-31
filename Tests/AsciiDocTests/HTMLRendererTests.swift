@@ -142,6 +142,46 @@ private func html(_ source: String) -> String {
     #expect(title.lowerBound < code.lowerBound)
 }
 
+// MARK: - Table cell specifiers
+
+@Test func spansBecomeCellAttributes() {
+    let out = html("= T\n\n|===\n| a | b\n2+| wide\n|===\n")
+
+    #expect(out.contains("<td colspan=\"2\">wide</td>"))
+    #expect(out.contains("<td>a</td>"))
+}
+
+@Test func alignmentsBecomeInlineStyles() {
+    let out = html("= T\n\n|===\n| a | b\n^| centred | >| right\n|===\n")
+
+    #expect(out.contains("text-align:center"))
+    #expect(out.contains("text-align:right"))
+}
+
+@Test func aHeaderCellIsAHeaderWhereverItSits() {
+    let out = html("= T\n\n|===\n| a | b\nh| Name | value\n|===\n")
+
+    #expect(out.contains("<th>Name</th>"))
+    #expect(out.contains("<td>value</td>"))
+}
+
+@Test func anAsciiDocCellParsesItsContent() {
+    // The continuation line carries no `|`, so it stays inside the cell —
+    // a line with one would start new cells.
+    let out = html("= T\n\n|===\n| a | b\na| * one\n* two\n|===\n")
+
+    // The cell's content is a real list, not a line of literal asterisks.
+    #expect(out.contains("<li>one</li>"))
+    #expect(out.contains("<li>two</li>"))
+}
+
+@Test func monospaceAndStrongCellStyles() {
+    let out = html("= T\n\n|===\n| a | b\nm| code() | s| loud\n|===\n")
+
+    #expect(out.contains("<code>code()</code>"))
+    #expect(out.contains("<strong>loud</strong>"))
+}
+
 @Test func aTableTitleBecomesItsCaption() {
     let out = html("= T\n\n.Results by year\n|===\n| a | b\n|===\n")
 
