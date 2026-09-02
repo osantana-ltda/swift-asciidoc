@@ -448,6 +448,91 @@ extension Inline.Macro {
     #expect(anchors[0].target == "spot")
 }
 
+// MARK: - Attribute lists bound to a span
+
+@Test func anIdBindsToTheSpanAfterIt() {
+    let parsed = inlines("a [#spot]#marked# word")
+
+    guard case .span(let span) = parsed[1] else {
+        Issue.record("expected a span")
+        return
+    }
+    #expect(span.attributes.id == "spot")
+    #expect(span.plainTextOfInlines == "marked")
+    // The range covers the attribute list too.
+    #expect(span.range.start.offset == 2)
+    #expect(span.range.end.offset == 17)
+}
+
+@Test func aRoleBindsToAnyInlineElement() {
+    for source in ["[.lead]*bold*", "[.lead]_italic_", "[.lead]`code`"] {
+        guard case .span(let span) = inlines(source)[0] else {
+            Issue.record("expected a span for \(source)")
+            continue
+        }
+        #expect(span.attributes.roles == ["lead"])
+    }
+}
+
+@Test func idAndRolesCombineInTheShorthand() {
+    guard case .span(let span) = inlines("[#spot.lead.big]#text#")[0] else {
+        Issue.record("expected a span")
+        return
+    }
+
+    #expect(span.attributes.id == "spot")
+    #expect(span.attributes.roles == ["lead", "big"])
+}
+
+@Test func bracketsThatBindToNothingStayText() {
+    // Prose in brackets, a list with no shorthand, a gap before the
+    // delimiter, and a delimiter that opens no span. What follows still
+    // parses as the span it is — it just carries nothing.
+    #expect(boundAttributes("see [see figure]#5# here").isEmpty)
+    #expect(boundAttributes("a [width=2]#x# b").isEmpty)
+    #expect(boundAttributes("a [#spot] #x# b").isEmpty)
+    #expect(inlines("a [#spot]not a span").count == 1)
+    // The brackets stay where they were written.
+    #expect(inlines("see [see figure]#5# here")[0].plainText == "see [see figure]")
+}
+
+@Test func anEscapedAttributeListIsLiteralText() {
+    let parsed = inlines("keep \\[.lead]*bold* literal")
+
+    // Defused, so it binds nothing; the span after it is untouched.
+    #expect(parsed[0].plainText == "keep [.lead]")
+    #expect(boundAttributes("keep \\[.lead]*bold* literal").isEmpty)
+}
+
+@Test func aSpanWithoutAttributesCarriesNone() {
+    guard case .span(let span) = inlines("plain #hi#")[1] else {
+        Issue.record("expected a span")
+        return
+    }
+
+    #expect(span.attributes.id == nil)
+    #expect(span.attributes.roles.isEmpty)
+}
+
+extension Inline.Span {
+    fileprivate var plainTextOfInlines: String {
+        inlines.map(\.plainText).joined()
+    }
+}
+
+/// The attribute lists that actually bound to a span in this source.
+private func boundAttributes(_ source: String) -> [BlockAttributes] {
+    inlines(source).compactMap { inline in
+        guard case .span(let span) = inline,
+            span.attributes.id != nil || !span.attributes.roles.isEmpty
+                || !span.attributes.options.isEmpty
+        else {
+            return nil
+        }
+        return span.attributes
+    }
+}
+
 // MARK: - Macro attribute lists
 
 @Test func aMacroAttributeListReadsItsFields() {

@@ -78,14 +78,25 @@ public enum Inline: Hashable, Sendable {
         public var variant: Variant
         public var form: Form
         public var inlines: [Inline]
-        /// The whole span, delimiters included.
+        /// The whole span, delimiters included — and the attribute list too,
+        /// when one precedes it.
         public var range: SourceRange
+        /// From an attribute list bound to this span: `[#id]#text#`,
+        /// `[.role]*bold*`. Empty for a span written on its own.
+        public var attributes: BlockAttributes
 
-        public init(variant: Variant, form: Form, inlines: [Inline], range: SourceRange) {
+        public init(
+            variant: Variant,
+            form: Form,
+            inlines: [Inline],
+            range: SourceRange,
+            attributes: BlockAttributes = BlockAttributes()
+        ) {
             self.variant = variant
             self.form = form
             self.inlines = inlines
             self.range = range
+            self.attributes = attributes
         }
     }
 

@@ -120,6 +120,20 @@ private func html(_ source: String) -> String {
     #expect(out.contains("<a href=\"#the-spot\">that place</a>"))
 }
 
+@Test func aBoundAttributeListReachesTheElement() {
+    let out = html("= T\n\nA [#spot]#marked# word and a [.lead]*bold* one.\n")
+
+    // An attributed `#...#` is a plain styled span, not a highlight.
+    #expect(out.contains("<span id=\"spot\">marked</span>"))
+    #expect(!out.contains("<mark"))
+    #expect(out.contains("<strong class=\"lead\">bold</strong>"))
+}
+
+@Test func anUnattributedHashSpanIsStillAHighlight() {
+    let out = html("= T\n\nPlain #hi# here.\n")
+    #expect(out.contains("<mark>hi</mark>"))
+}
+
 @Test func theAnchorMacroFormRendersAsATarget() {
     let out = html("= T\n\nanchor:spot[] marks it.\n")
     #expect(out.contains("<span id=\"spot\"></span>"))

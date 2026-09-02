@@ -9,9 +9,10 @@
 /// doubled, valid anywhere — `un**frea**king**believable**` works). A delimiter
 /// that cannot open or close a span is ordinary text, never an error.
 ///
-/// Macros (`link:`, `xref:`, `image:`, footnotes), attribute references
-/// (`{name}`) and inline anchors are not parsed yet; their syntax passes
-/// through as text.
+/// Macros (`link:`, `xref:`, `image:`, footnotes), bare URLs, attribute
+/// references (`{name}`), inline anchors (`[[id]]`) and attribute lists bound
+/// to a span (`[#id]#text#`) are all modelled. Anything that does not parse
+/// stays text — the passthrough guarantee, never an error.
 public enum InlineParser {
     /// Parses the inline content of the given lines, which are joined by
     /// newlines the way they appear in the source. Positions in the result are
@@ -141,6 +142,7 @@ public enum InlineParser {
                     || matchMacro(in: characters, at: index + 1) != nil
                     || matchAttributeReference(in: characters, at: index + 1) != nil
                     || matchAnchor(in: characters, at: index + 1) != nil
+                    || matchAttributedSpan(in: characters, at: index + 1) != nil
 
                 if variants.keys.contains(next.character) || escapesMacro {
                     appendText(next)
@@ -166,6 +168,14 @@ public enum InlineParser {
                 continue
             }
 
+            if current.character == "[", let match = matchAttributedSpan(in: characters, at: index)
+            {
+                flushText()
+                inlines.append(.span(match.span))
+                index = match.next
+                continue
+            }
+
             if current.character == "<", let match = matchXref(in: characters, at: index) {
                 flushText()
                 inlines.append(.macro(match.macro))
@@ -184,65 +194,113 @@ public enum InlineParser {
                 continue
             }
 
-            guard let variant = variants[current.character] else {
+            guard variants[current.character] != nil,
+                let match = matchSpan(in: characters, at: index, from: index)
+            else {
+                // Not a span here; the delimiter is just a character.
                 appendText(current)
                 index += 1
                 continue
             }
 
-            let delimiter = current.character
-            let doubled =
-                !singleOnly.contains(delimiter)
-                && index + 1 < characters.endIndex
-                && characters[index + 1].character == delimiter
-
-            if doubled, let close = closingPair(of: delimiter, in: characters, after: index + 2) {
-                flushText()
-                inlines.append(
-                    .span(
-                        Inline.Span(
-                            variant: variant,
-                            form: .unconstrained,
-                            inlines: parse(characters[(index + 2)..<close]),
-                            range: SourceRange(
-                                start: current.location,
-                                end: characters[close + 1].end
-                            )
-                        )
-                    )
-                )
-                index = close + 2
-                continue
-            }
-
-            if canOpenConstrained(delimiter, in: characters, at: index),
-                let close = closingSingle(of: delimiter, in: characters, after: index + 1)
-            {
-                flushText()
-                inlines.append(
-                    .span(
-                        Inline.Span(
-                            variant: variant,
-                            form: .constrained,
-                            inlines: parse(characters[(index + 1)..<close]),
-                            range: SourceRange(
-                                start: current.location,
-                                end: characters[close].end
-                            )
-                        )
-                    )
-                )
-                index = close + 1
-                continue
-            }
-
-            // Not a span here; the delimiter is just a character.
-            appendText(current)
-            index += 1
+            flushText()
+            inlines.append(.span(match.span))
+            index = match.next
         }
 
         flushText()
         return inlines
+    }
+
+    // MARK: - Spans
+
+    private struct SpanMatch {
+        let span: Inline.Span
+        let next: Int
+    }
+
+    /// A formatting span opening at `index`. `start` is where the whole
+    /// construct begins — the `[` of an attribute list when one precedes the
+    /// delimiter — so the range covers that too.
+    private static func matchSpan(
+        in characters: ArraySlice<Positioned>,
+        at index: Int,
+        from start: Int,
+        attributes: BlockAttributes = BlockAttributes()
+    ) -> SpanMatch? {
+        guard index < characters.endIndex,
+            let variant = variants[characters[index].character]
+        else {
+            return nil
+        }
+
+        let delimiter = characters[index].character
+        let doubled =
+            !singleOnly.contains(delimiter)
+            && index + 1 < characters.endIndex
+            && characters[index + 1].character == delimiter
+
+        if doubled, let close = closingPair(of: delimiter, in: characters, after: index + 2) {
+            return SpanMatch(
+                span: Inline.Span(
+                    variant: variant,
+                    form: .unconstrained,
+                    inlines: parse(characters[(index + 2)..<close]),
+                    range: SourceRange(
+                        start: characters[start].location,
+                        end: characters[close + 1].end
+                    ),
+                    attributes: attributes
+                ),
+                next: close + 2
+            )
+        }
+
+        guard canOpenConstrained(delimiter, in: characters, at: index),
+            let close = closingSingle(of: delimiter, in: characters, after: index + 1)
+        else {
+            return nil
+        }
+
+        return SpanMatch(
+            span: Inline.Span(
+                variant: variant,
+                form: .constrained,
+                inlines: parse(characters[(index + 1)..<close]),
+                range: SourceRange(
+                    start: characters[start].location,
+                    end: characters[close].end
+                ),
+                attributes: attributes
+            ),
+            next: close + 1
+        )
+    }
+
+    /// `[#id]#text#`, `[.role]*bold*` — an attribute list bound to the inline
+    /// element written directly after it.
+    ///
+    /// Only the shorthand binds: an id, a role, or an option. A bracket pair
+    /// holding anything else is prose — `[see figure]#5#` keeps its brackets —
+    /// and the list must sit against the delimiter, with nothing between.
+    private static func matchAttributedSpan(
+        in characters: ArraySlice<Positioned>, at index: Int
+    ) -> SpanMatch? {
+        guard index < characters.endIndex, characters[index].character == "[",
+            let list = attributeList(in: characters, openingAt: index)
+        else {
+            return nil
+        }
+
+        var attributes = BlockAttributes()
+        AttributeListParser.parse(
+            body: list.text, into: &attributes, firstPositionalIsStyle: false)
+
+        guard attributes.id != nil || !attributes.roles.isEmpty || !attributes.options.isEmpty
+        else {
+            return nil
+        }
+        return matchSpan(in: characters, at: list.end, from: index, attributes: attributes)
     }
 
     // MARK: - Delimiter rules

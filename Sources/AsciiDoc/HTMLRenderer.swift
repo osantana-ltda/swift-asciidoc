@@ -265,13 +265,21 @@ public enum HTMLRenderer {
 
         case .span(let span):
             let body = render(span.inlines, attributes: attributes)
+            let markup = htmlAttributes(id: span.attributes.id, roles: span.attributes.roles)
             switch span.variant {
-            case .strong: return "<strong>\(body)</strong>"
-            case .emphasis: return "<em>\(body)</em>"
-            case .code: return "<code>\(body)</code>"
-            case .mark: return "<mark>\(body)</mark>"
-            case .superscriptText: return "<sup>\(body)</sup>"
-            case .subscriptText: return "<sub>\(body)</sub>"
+            case .strong: return "<strong\(markup)>\(body)</strong>"
+            case .emphasis: return "<em\(markup)>\(body)</em>"
+            case .code: return "<code\(markup)>\(body)</code>"
+            case .superscriptText: return "<sup\(markup)>\(body)</sup>"
+            case .subscriptText: return "<sub\(markup)>\(body)</sub>"
+            case .mark:
+                // `#text#` on its own is a highlight. Given an id or a role it
+                // is AsciiDoc's plain styled span instead — the attributes are
+                // the whole point, and there is nothing to highlight.
+                guard markup.isEmpty else {
+                    return "<span\(markup)>\(body)</span>"
+                }
+                return "<mark>\(body)</mark>"
             }
 
         case .macro(let macro):
