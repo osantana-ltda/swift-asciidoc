@@ -224,6 +224,23 @@ extension Parser {
                 )
             }
 
+            if let include = Self.include(line) {
+                advance()
+                var attributes = metadata.attributes
+                AttributeListParser.parse(
+                    body: include.attributes, into: &attributes, firstPositionalIsStyle: false)
+
+                return Block(
+                    kind: .include(target: include.target),
+                    range: SourceRange(
+                        start: metadata.start ?? line.range.start, end: line.range.end),
+                    title: metadata.title,
+                    attributes: attributes,
+                    lines: [line],
+                    prelude: metadata.rawLines
+                )
+            }
+
             if Self.isMarkdownQuote(line) {
                 return parseMarkdownQuote(metadata: metadata)
             }
@@ -233,6 +250,27 @@ extension Parser {
             }
 
             return parseParagraph(metadata: metadata)
+        }
+
+        /// `include::target[attrlist]` alone on a line. A leading backslash
+        /// escapes the directive, which is how a book about AsciiDoc writes
+        /// one without including anything.
+        static func include(_ line: SourceLine) -> (target: String, attributes: String)? {
+            let trimmed = String(line.trimmed)
+            guard trimmed.hasPrefix("include::"), trimmed.hasSuffix("]") else {
+                return nil
+            }
+
+            let body = trimmed.dropFirst("include::".count).dropLast()
+            guard let open = body.firstIndex(of: "[") else {
+                return nil
+            }
+            let target = String(body[body.startIndex..<open])
+            guard !target.isEmpty else {
+                return nil
+            }
+
+            return (target, String(body[body.index(after: open)...]))
         }
 
         /// `NOTE: text` and friends. The label is markup, so it is dropped from

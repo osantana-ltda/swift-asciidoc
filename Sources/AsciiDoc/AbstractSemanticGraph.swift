@@ -152,6 +152,12 @@ public enum AbstractSemanticGraph {
         case .listItem:
             return encodeListItem(block, marker: "*")
 
+        // An include is a preprocessor directive: the graph describes the
+        // document after expansion, so an unexpanded one has no node of its
+        // own. The serializer still writes it back untouched.
+        case .include:
+            return nil
+
         case .comment, .attributeEntry, .unparsed:
             // Not part of the graph: comments carry no semantics, attribute
             // entries are folded into the document's attributes, and anything

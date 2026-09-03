@@ -170,6 +170,7 @@ func describe(_ kind: Block.Kind) -> String {
     case .listItem: "item"
     case .comment: "comment"
     case .attributeEntry: "attribute"
+    case .include(let target): "include \(target)"
     case .unparsed: "unparsed"
     }
 }

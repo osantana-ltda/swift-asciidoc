@@ -185,6 +185,13 @@ public enum HTMLRenderer {
             // address the toolchain.
             return ""
 
+        case .include(let target):
+            // Reaching the renderer means nobody resolved it. Showing the
+            // reference and saying so is the §4.2 guarantee; quietly dropping
+            // the line would lose content the author wrote.
+            return "<div class=\"include unresolved\">Unresolved include: "
+                + "<code>\(escape(target))</code></div>\n"
+
         case .unparsed:
             return "<pre class=\"unparsed\">\(escape(block.text))</pre>\n"
         }

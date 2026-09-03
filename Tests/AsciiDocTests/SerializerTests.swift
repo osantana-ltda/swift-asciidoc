@@ -51,6 +51,10 @@ private let roundTripSources: [String] = [
     "[[anchor]]\n.A Title\n[source,swift,linenums]\n----\ncode\n----\n",
     ".Titled paragraph\nBody of it.\n",
     "[quote#epigraph.lead%hardbreaks]\nStyled every which way.\n",
+    // Includes, resolved by nobody, and one written literally.
+    "include::chapters/one.adoc[]\n",
+    ".A caption\ninclude::code/x.swift[lines=1..5,indent=0]\n",
+    "\\include::literal.adoc[]\n",
     // Comments.
     "// one\n// two\n\nText.\n",
     "////\nHidden block.\n////\n",

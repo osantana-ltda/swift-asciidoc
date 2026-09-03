@@ -144,6 +144,13 @@ public enum Serializer {
         case .paragraph, .attributeEntry, .unparsed, .tableCell:
             emitLines(of: block, into: &emitter)
 
+        case .include(let target):
+            if block.lines.isEmpty {
+                emitter.emit(text: "include::\(target)[]")
+            } else {
+                emitLines(of: block, into: &emitter)
+            }
+
         case .listItem:
             // The item's own text, then whatever hangs off it: a nested list,
             // or a block attached with `+`, which carries that marker on its
@@ -336,6 +343,11 @@ public enum Serializer {
             }
         }
 
+        // An include writes its attribute list inside its own line, so it
+        // never gets one of its own.
+        if case .include = block.kind {
+            return
+        }
         if let line = canonicalAttributeLine(block.attributes) {
             emitter.emit(text: line)
         }

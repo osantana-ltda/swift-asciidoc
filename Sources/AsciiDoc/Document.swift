@@ -200,6 +200,11 @@ public struct Block: Hashable, Sendable {
         case comment
         /// A `:name: value` entry outside the header.
         case attributeEntry
+        /// `include::target[attrlist]`. Resolving one needs a filesystem,
+        /// which this package deliberately has none of: the parse records the
+        /// reference and the host expands it. An include that reaches the
+        /// tree is therefore one nobody resolved, and it is kept whole.
+        case include(target: String)
         /// A construct this parser does not model yet, preserved verbatim so
         /// that nothing is lost on the way back out.
         case unparsed

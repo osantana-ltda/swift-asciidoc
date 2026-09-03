@@ -444,6 +444,31 @@ import Testing
     #expect(attached[0].prelude.first?.text == "+")
 }
 
+// MARK: - Includes
+
+@Test func anIncludeRecordsItsTargetAndAttributes() {
+    let document = Parser.parse("Before.\n\ninclude::code/sample.swift[lines=1..5,indent=0]\n")
+
+    let include = document.blocks[1]
+    #expect(include.kind == .include(target: "code/sample.swift"))
+    #expect(include.attributes.named["lines"] == "1..5")
+    #expect(include.attributes.named["indent"] == "0")
+    // The line itself is kept, which is what writes it back out.
+    #expect(include.lines.first?.text == "include::code/sample.swift[lines=1..5,indent=0]")
+}
+
+@Test func anEscapedIncludeIsOrdinaryText() {
+    let document = Parser.parse("\\include::literal.adoc[]\n")
+    #expect(document.blocks[0].kind == .paragraph)
+}
+
+@Test func aMalformedIncludeIsNotOne() {
+    // No brackets, no target, and a colon run that is a description term.
+    #expect(Parser.parse("include::no-brackets.adoc\n").blocks[0].kind == .paragraph)
+    #expect(Parser.parse("include::[]\n").blocks[0].kind == .paragraph)
+    #expect(Parser.parse("include:: with a space\n").blocks[0].kind == .descriptionList)
+}
+
 // MARK: - Tables
 
 @Test func tablesGroupCellsByTheFirstLine() {

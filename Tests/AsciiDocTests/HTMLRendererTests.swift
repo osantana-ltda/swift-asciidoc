@@ -124,6 +124,13 @@ private func html(_ source: String) -> String {
     #expect(out.contains("<td>Analyst, senior</td>"))
 }
 
+@Test func anUnresolvedIncludeShowsItselfRatherThanVanishing() {
+    let out = html("= T\n\ninclude::missing.adoc[]\n")
+
+    #expect(out.contains("<code>missing.adoc</code>"))
+    #expect(out.contains("Unresolved include"))
+}
+
 @Test func commentsAndAttributeEntriesLeaveNoTrace() {
     let out = html("= T\n:toc: left\n\n// a note to authors\n\nVisible.\n")
     #expect(!out.contains("note to authors"))
