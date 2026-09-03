@@ -30,6 +30,10 @@ private let roundTripSources: [String] = [
     // Delimited blocks, verbatim and compound, odd delimiter lengths.
     "[source,swift]\n----\nlet x = 1\n\n// kept verbatim\n----\n",
     "------\nlonger delimiter\n------\n",
+    // A delimiter padded out to the width of the table, as a real book writes
+    // it, and a mismatched one that is content rather than a close.
+    "|=========\n| a | b\n|=========\n\nAfter.\n",
+    "------\ncode\n----\nstill code\n------\n",
     "____\nQuoted prose.\n\nMore.\n____\n",
     "====\nAn example.\n====\n",
     "****\nSidebar.\n****\n",

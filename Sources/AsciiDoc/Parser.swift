@@ -335,7 +335,7 @@ extension Parser {
                     range: range,
                     blocks: TableParser.rows(
                         of: content, attributes: metadata.attributes,
-                        delimiter: delimiter.text),
+                        delimiter: delimiter.marker),
                     lines: content,
                     opening: opening,
                     closing: closing
@@ -878,7 +878,13 @@ extension Parser {
 
 extension Parser {
     fileprivate struct Delimiter: Equatable {
+        /// The line exactly as written, which is what a closing line must
+        /// match.
         let text: String
+        /// The canonical four-character form, which names the flavour: a
+        /// table's delimiter may be any length, but only its first four
+        /// characters say whether it is psv, csv or dsv.
+        let marker: String
         let kind: Block.Kind
         let isCompound: Bool
 
@@ -887,6 +893,7 @@ extension Parser {
 
             if trimmed == "--" {
                 text = trimmed
+                marker = trimmed
                 kind = .open
                 isCompound = true
                 return
@@ -897,9 +904,14 @@ extension Parser {
             else {
                 // `|===` is the usual table; `,===` and `:===` are the same
                 // block with their format implied by the delimiter itself.
-                for marker in ["|===", ",===", ":==="]
-                where trimmed.hasPrefix(marker) {
-                    text = marker
+                // Any number of trailing `=` is allowed, and a real book uses
+                // them to line the delimiter up with its widest row.
+                for candidate in ["|===", ",===", ":==="]
+                where trimmed.hasPrefix(candidate)
+                    && trimmed.dropFirst(candidate.count).allSatisfy({ $0 == "=" })
+                {
+                    text = trimmed
+                    marker = candidate
                     kind = .table
                     isCompound = false
                     return
@@ -934,24 +946,20 @@ extension Parser {
             }
 
             text = trimmed
+            marker = String(trimmed.prefix(4))
         }
 
-        /// AsciiDoc closes a delimited block with a line of the same character,
-        /// not necessarily the same length.
+        /// A delimited block closes on a line identical to the one that opened
+        /// it. A shorter or longer run of the same character is content, not a
+        /// closing delimiter.
+        ///
+        /// Probed against Asciidoctor, which lets a mismatched block run on to
+        /// the next line that does match, or to the end of the document. The
+        /// rule here used to be "same character, any length", and a real book
+        /// caught it: a table closed by a delimiter as long as its widest row
+        /// swallowed the two hundred lines of prose that followed it.
         func closes(_ line: SourceLine) -> Bool {
-            let trimmed = String(line.trimmed)
-            guard let first = text.first else {
-                return false
-            }
-
-            if text == "--" {
-                return trimmed == "--"
-            }
-            if kind == .table {
-                return trimmed == text
-            }
-
-            return trimmed.count >= 4 && trimmed.allSatisfy { $0 == first }
+            String(line.trimmed) == text
         }
     }
 }

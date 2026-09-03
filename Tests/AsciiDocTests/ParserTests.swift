@@ -444,6 +444,47 @@ import Testing
     #expect(attached[0].prelude.first?.text == "+")
 }
 
+// MARK: - Delimiter lengths
+
+@Test func aDelimitedBlockClosesOnlyOnTheLineThatOpenedIt() {
+    // Found by running a real book through the parser: a table whose
+    // delimiter was padded out to the width of its widest row swallowed the
+    // prose that followed it, because a plain `|===` was accepted as its
+    // close. Asciidoctor requires the two to match exactly.
+    let document = Parser.parse(
+        """
+        |=========
+        | a | b
+        |=========
+
+        A paragraph after it.
+        """
+    )
+
+    #expect(document.blocks.count == 2)
+    #expect(document.blocks[0].kind == .table)
+    #expect(document.blocks[0].range.end.line == 3)
+    #expect(document.blocks[1].kind == .paragraph)
+}
+
+@Test func aMismatchedDelimiterIsContentNotAClose() {
+    let document = Parser.parse("------\ncode\n----\nstill code\n------\n")
+
+    #expect(document.blocks.count == 1)
+    #expect(document.blocks[0].kind == .listing)
+    // The short line is part of the listing, not its end.
+    #expect(document.blocks[0].text.contains("----\nstill code"))
+}
+
+@Test func aPaddedTableDelimiterStillNamesItsFormat() {
+    // The flavour comes from the first four characters, the close from the
+    // whole line — so a padded `,===` is still csv.
+    let document = Parser.parse(",=========\nName,Role\n,=========\n")
+
+    #expect(document.blocks[0].kind == .table)
+    #expect(document.blocks[0].blocks[0].blocks.map(\.text) == ["Name", "Role"])
+}
+
 // MARK: - Includes
 
 @Test func anIncludeRecordsItsTargetAndAttributes() {
