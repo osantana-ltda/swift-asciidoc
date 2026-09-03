@@ -307,6 +307,143 @@ import Testing
     #expect(document.blocks[0].kind == .orderedList)
 }
 
+// MARK: - Nested lists, description lists, continuation
+
+@Test func aDeeperMarkerNestsInsideTheItemBeforeIt() {
+    let document = Parser.parse(
+        """
+        * one
+        ** deep
+        *** deeper
+        ** back
+        * two
+        """
+    )
+
+    let list = document.blocks[0]
+    #expect(list.blocks.count == 2)
+
+    let nested = list.blocks[0].blocks[0]
+    #expect(nested.kind == .unorderedList)
+    #expect(nested.blocks.count == 2)
+    #expect(nested.blocks[0].blocks[0].blocks.count == 1)
+    // The outer item's range grew to cover everything under it.
+    #expect(list.blocks[0].range.end.line == 4)
+}
+
+@Test func aDifferentMarkerFamilyNestsToo() {
+    let document = Parser.parse(
+        """
+        . ordered
+        * nested bullet
+        . second ordered
+        """
+    )
+
+    let list = document.blocks[0]
+    #expect(list.kind == .orderedList)
+    #expect(list.blocks.count == 2)
+    #expect(list.blocks[0].blocks[0].kind == .unorderedList)
+}
+
+@Test func aBlankLineBetweenItemsKeepsTheListGoing() {
+    let document = Parser.parse("* one\n\n* two\n\nA paragraph.\n")
+
+    #expect(document.blocks.count == 2)
+    #expect(document.blocks[0].blocks.count == 2)
+    #expect(document.blocks[1].kind == .paragraph)
+}
+
+@Test func aBlankLineEndsTheListOnlyForSomethingThatIsNotAList() {
+    // Probed against Asciidoctor: a list of a new signature after a blank
+    // line nests inside the item above it rather than starting a sibling.
+    // Counter-intuitive, and worth pinning.
+    let nested = Parser.parse("* a\n\nTerm:: b\n")
+    #expect(nested.blocks.count == 1)
+    #expect(nested.blocks[0].blocks[0].blocks[0].kind == .descriptionList)
+
+    // A paragraph there does end the list.
+    let ended = Parser.parse("* a\n\nJust prose.\n")
+    #expect(ended.blocks.count == 2)
+    #expect(ended.blocks[1].kind == .paragraph)
+}
+
+@Test func descriptionListsCarryTheirTerms() {
+    let document = Parser.parse(
+        """
+        Term:: A definition
+        Other::
+        On the next line
+        """
+    )
+
+    let list = document.blocks[0]
+    #expect(list.kind == .descriptionList)
+    #expect(list.blocks.count == 2)
+    #expect(list.blocks[0].title?.text == "Term")
+    #expect(list.blocks[1].title?.text == "Other")
+    #expect(list.blocks[1].lines.count == 2)
+}
+
+@Test func aDeeperTermNestsLikeAnyOtherMarker() {
+    let document = Parser.parse("Outer:: One\nInner::: Two\nOuter2:: Three\n")
+
+    let list = document.blocks[0]
+    #expect(list.blocks.count == 2)
+    #expect(list.blocks[0].blocks[0].kind == .descriptionList)
+    #expect(list.blocks[0].blocks[0].blocks[0].title?.text == "Inner")
+}
+
+@Test func aTermsRangeLocatesItExactly() {
+    let source = "The term:: A definition\n"
+    let term = Parser.parse(source).blocks[0].blocks[0].title!
+    let text = source as NSString
+
+    #expect(
+        text.substring(
+            with: NSRange(
+                location: term.range.start.offset,
+                length: term.range.end.offset - term.range.start.offset
+            )
+        ) == "The term"
+    )
+}
+
+@Test func aColonInsideAWordIsNotATerm() {
+    // The marker must end the line or be followed by a space, which is what
+    // leaves C++ scope operators and URLs alone.
+    #expect(Parser.parse("Use std::vector here.\n").blocks[0].kind == .paragraph)
+    #expect(Parser.parse("See https://x.io/a::b now.\n").blocks[0].kind == .paragraph)
+    // An attribute entry has nothing before its colon, so it is no term.
+    // (In the body: at the top of a document it would be the header.)
+    #expect(Parser.parse("Body.\n\n:name: value\n").blocks[1].kind == .attributeEntry)
+}
+
+@Test func aContinuationAttachesTheBlockAfterIt() {
+    let document = Parser.parse(
+        """
+        * item
+        +
+        ----
+        code
+        ----
+        +
+        Attached paragraph.
+        * next
+        """
+    )
+
+    let list = document.blocks[0]
+    #expect(list.blocks.count == 2)
+
+    let attached = list.blocks[0].blocks
+    #expect(attached.count == 2)
+    #expect(attached[0].kind == .listing)
+    #expect(attached[1].kind == .paragraph)
+    // The `+` rides on the attached block, which is what puts it back.
+    #expect(attached[0].prelude.first?.text == "+")
+}
+
 // MARK: - Tables
 
 @Test func tablesGroupCellsByTheFirstLine() {

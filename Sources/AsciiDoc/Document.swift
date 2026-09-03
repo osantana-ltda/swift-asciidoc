@@ -191,6 +191,10 @@ public struct Block: Hashable, Sendable {
         case tableCell
         case unorderedList
         case orderedList
+        /// `term:: definition`
+        case descriptionList
+        /// An item of any list family. Its own lines are the item's text; a
+        /// nested list, or a block attached with `+`, is a child block.
         case listItem
         /// A `//` line or a `////` block.
         case comment
@@ -205,7 +209,8 @@ public struct Block: Hashable, Sendable {
     /// Everything the block covers, including its delimiters, attribute list
     /// and title.
     public var range: SourceRange
-    /// The block title, from a `.Title` line, or a section's own title.
+    /// The block title, from a `.Title` line, a section's own title, or a
+    /// description item's term — the label standing before its definition.
     public var title: Title?
     public var attributes: BlockAttributes
     /// Nested blocks, for sections, lists and compound delimited blocks.

@@ -143,6 +143,12 @@ public enum AbstractSemanticGraph {
             node["location"] = location(block.range)
             return node
 
+        case .descriptionList:
+            var node = named("dlist")
+            node["items"] = block.blocks.compactMap { encodeListItem($0, marker: "::") }
+            node["location"] = location(block.range)
+            return node
+
         case .listItem:
             return encodeListItem(block, marker: "*")
 
@@ -173,7 +179,14 @@ public enum AbstractSemanticGraph {
         node["marker"] = marker
 
         var lines = block.lines
-        if !lines.isEmpty {
+        if let term = block.title {
+            // A description item's marker trails its term, so the principal
+            // starts after both.
+            let line = SourceLine(
+                text: term.text, range: term.range, number: term.range.start.line)
+            node["terms"] = [inlineNodes(of: [line])]
+            lines = Self.strippingTerm(lines, term: term.text, marker: marker)
+        } else if !lines.isEmpty {
             lines[0] = stripMarker(lines[0], length: marker.count + 1)
         }
         let principal = inlineNodes(of: lines)
@@ -181,8 +194,29 @@ public enum AbstractSemanticGraph {
             node["principal"] = principal
         }
 
+        // A nested list, or a block attached with `+`, hangs off the item.
+        let attached = block.blocks.compactMap(encodeBlock)
+        if !attached.isEmpty {
+            node["blocks"] = attached
+        }
+
         node["location"] = location(block.range)
         return node
+    }
+
+    private static func strippingTerm(
+        _ lines: [SourceLine], term: String, marker: String
+    ) -> [SourceLine] {
+        guard let first = lines.first else {
+            return lines
+        }
+        let leading = first.text.prefix { $0 == " " || $0 == "\t" }.count
+        let body = first.text.dropFirst(leading + term.count)
+        let gap = body.prefix { $0 == " " || $0 == "\t" }.count
+        let run = body.dropFirst(gap).prefix { $0 == ":" || $0 == ";" }.count
+        let space = body.dropFirst(gap + run).prefix { $0 == " " }.count
+
+        return [stripMarker(first, length: term.count + gap + run + space)] + lines.dropFirst()
     }
 
     /// Drops the list marker and the space after it, keeping the rest located

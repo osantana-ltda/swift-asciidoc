@@ -58,6 +58,15 @@ private let roundTripSources: [String] = [
     "* One\n* Two that wraps\n  onto another line\n* Three\n",
     ". First\n. Second\n",
     "1. Numbered\n2. Also numbered\n",
+    // Nesting, by depth and by family, and blank lines between items.
+    "* one\n** deep\n*** deeper\n** back\n* two\n",
+    ". ordered\n* nested bullet\n. second\n",
+    "* one\n\n* two\n\nA paragraph after.\n",
+    // Description lists, nested, with a definition on its own line.
+    "Term:: A definition\nOther::\nOn the next line\nInner::: Deeper\n",
+    "Term;; Semicolons too\n",
+    // List continuation: a block, then another, then the list resumes.
+    "* item\n+\n----\ncode\n----\n+\nAttached paragraph.\n* next\n",
     // Tables, with and without header, cols, escaped pipes.
     "|===\n| a | b\n| c | d\n|===\n",
     "|===\n| h1 | h2\n\n| a | b\n|===\n",

@@ -450,20 +450,34 @@ extension Parser {
 
         // MARK: - Lists
 
-        private mutating func parseList(metadata: Metadata) -> Block {
+        /// A list and everything nested under it.
+        ///
+        /// `enclosing` holds the signatures of the lists this one sits inside.
+        /// A marker that matches one of them belongs to that ancestor and ends
+        /// this list; a marker seen for the first time opens a list nested in
+        /// the item just read. That single rule covers every shape AsciiDoc
+        /// allows, including an ordered list inside an unordered item.
+        private mutating func parseList(metadata: Metadata, enclosing: [String] = []) -> Block {
             guard let first = current, let marker = ListMarker(line: first) else {
                 return metadata.orphanBlock() ?? Block(kind: .unorderedList, range: .empty)
             }
 
+            let inner = enclosing + [marker.signature]
             var items: [Block] = []
-            while let line = current, let next = ListMarker(line: line), next.depth >= marker.depth
-            {
-                guard next.isOrdered == marker.isOrdered, next.depth == marker.depth else {
-                    // A deeper marker belongs to the item just read; nesting is
-                    // not modelled yet, so it is left to the item's own lines.
+
+            while let next = nextMarker() {
+                if next.signature == marker.signature {
+                    items.append(parseListItem(marker: next, enclosing: inner))
+                    continue
+                }
+                guard !enclosing.contains(next.signature), var last = items.popLast() else {
                     break
                 }
-                items.append(parseListItem())
+
+                let nested = parseList(metadata: Metadata(), enclosing: inner)
+                last.blocks.append(nested)
+                last.range = SourceRange(start: last.range.start, end: nested.range.end)
+                items.append(last)
             }
 
             let range = SourceRange(
@@ -471,14 +485,42 @@ extension Parser {
                 end: items.last?.range.end ?? first.range.end
             )
 
-            return metadata.finish(
-                kind: marker.isOrdered ? .orderedList : .unorderedList,
-                range: range,
-                blocks: items
-            )
+            return metadata.finish(kind: Self.listKind(of: marker), range: range, blocks: items)
         }
 
-        private mutating func parseListItem() -> Block {
+        private static func listKind(of marker: ListMarker) -> Block.Kind {
+            switch marker.style {
+            case .unordered: return .unorderedList
+            case .ordered: return .orderedList
+            case .description: return .descriptionList
+            }
+        }
+
+        /// The marker the list continues with, looking past the blank lines
+        /// that may separate items.
+        ///
+        /// A blank line ends a list only when what follows is not a list at
+        /// all — probed against Asciidoctor, which nests a list of a new
+        /// signature there rather than starting a sibling. A paragraph after
+        /// the blank line does end it.
+        private mutating func nextMarker() -> ListMarker? {
+            if let line = current, !line.isBlank {
+                return ListMarker(line: line)
+            }
+
+            var lookahead = index
+            while lookahead < lines.count, lines[lookahead].isBlank {
+                lookahead += 1
+            }
+            guard lookahead < lines.count, let marker = ListMarker(line: lines[lookahead]) else {
+                return nil
+            }
+
+            index = lookahead
+            return marker
+        }
+
+        private mutating func parseListItem(marker: ListMarker, enclosing: [String]) -> Block {
             guard let first = current else {
                 return Block(kind: .listItem, range: .empty)
             }
@@ -486,23 +528,47 @@ extension Parser {
             var content = [first]
             advance()
 
-            // Wrapped lines belong to the item; a new marker or a blank line
-            // ends it. List continuation with `+` is not modelled yet.
+            // Wrapped lines belong to the item; a new marker, a blank line or a
+            // continuation ends its own text.
             while let line = current, !line.isBlank, ListMarker(line: line) == nil,
-                Self.sectionLevel(line) == nil, Delimiter(line: line) == nil
+                Self.sectionLevel(line) == nil, Delimiter(line: line) == nil,
+                !Self.isListContinuation(line)
             {
                 content.append(line)
                 advance()
             }
 
+            var attached: [Block] = []
+            var end = content[content.count - 1].range.end
+
+            // `+` attaches the block written after it to this item. The marker
+            // line rides on that block's prelude, so it comes back out exactly
+            // where it was written.
+            while let line = current, Self.isListContinuation(line) {
+                advance()
+                guard let block = parseBlock() else {
+                    break
+                }
+                var carried = block
+                carried.prelude.insert(line, at: 0)
+                carried.range = SourceRange(start: line.range.start, end: block.range.end)
+                attached.append(carried)
+                end = carried.range.end
+            }
+
             return Block(
                 kind: .listItem,
-                range: SourceRange(
-                    start: first.range.start,
-                    end: content[content.count - 1].range.end
-                ),
+                range: SourceRange(start: first.range.start, end: end),
+                title: marker.term,
+                blocks: attached,
                 lines: content
             )
+        }
+
+        /// A lone `+` on its own line — AsciiDoc's list continuation. Four or
+        /// more are a passthrough delimiter, which `Delimiter` claims first.
+        static func isListContinuation(_ line: SourceLine) -> Bool {
+            line.trimmed == "+"
         }
 
         // MARK: - Line classification
@@ -855,11 +921,42 @@ extension Parser {
 // MARK: - List markers
 
 extension Parser {
-    fileprivate struct ListMarker {
-        let depth: Int
-        let isOrdered: Bool
+    /// The marker opening a list item, in any of AsciiDoc's three families.
+    ///
+    /// The marker **as written** is what decides nesting: `*` and `**` are
+    /// different lists, and so are `*` and `-`, or `::` and `:::`. Items whose
+    /// signatures match are siblings; a signature not seen yet opens a list
+    /// nested inside the item just read. Numbered items are the one
+    /// normalisation — `1.` and `2.` are the same list, not two.
+    fileprivate struct ListMarker: Equatable {
+        enum Style: Equatable {
+            case unordered
+            case ordered
+            case description
+        }
+
+        let signature: String
+        let style: Style
+        /// A description item's term — what stands before the marker. Nil for
+        /// the bullet families, whose marker comes first.
+        let term: Title?
 
         init?(line: SourceLine) {
+            if let bullet = Self.bullet(line: line) {
+                signature = bullet.signature
+                style = bullet.style
+                term = nil
+                return
+            }
+            guard let described = Self.described(line: line) else {
+                return nil
+            }
+            signature = described.signature
+            style = .description
+            term = described.term
+        }
+
+        private static func bullet(line: SourceLine) -> (signature: String, style: Style)? {
             let trimmed = line.trimmed
             guard let first = trimmed.first else {
                 return nil
@@ -875,28 +972,84 @@ extension Parser {
                 guard !(first == "*" && run.count >= 4), !(first == "-" && run.count >= 2) else {
                     return nil
                 }
-                depth = run.count
-                isOrdered = false
+                return (String(run), .unordered)
 
             case ".":
                 let run = trimmed.prefix { $0 == "." }
                 guard run.count < 4, trimmed.dropFirst(run.count).hasPrefix(" ") else {
                     return nil
                 }
-                depth = run.count
-                isOrdered = true
+                return (String(run), .ordered)
 
             case "0"..."9":
                 let digits = trimmed.prefix { $0.isNumber }
                 guard trimmed.dropFirst(digits.count).hasPrefix(". ") else {
                     return nil
                 }
-                depth = 1
-                isOrdered = true
+                return ("0.", .ordered)
 
             default:
                 return nil
             }
+        }
+
+        /// `term:: definition`, the marker being `::`, `:::`, `::::` or `;;`.
+        ///
+        /// The marker is the first such run that ends the line or is followed
+        /// by a space — which is exactly what leaves `std::vector` alone — and
+        /// the term is everything before it. A run with nothing before it is
+        /// an attribute entry, not a term.
+        private static func described(line: SourceLine) -> (signature: String, term: Title)? {
+            let characters = Array(line.text)
+            let leading = characters.prefix { $0 == " " || $0 == "\t" }.count
+            var index = leading
+
+            while index < characters.count {
+                let character = characters[index]
+                guard character == ":" || character == ";" else {
+                    index += 1
+                    continue
+                }
+
+                var run = 0
+                while index + run < characters.count, characters[index + run] == character {
+                    run += 1
+                }
+                let after = index + run
+                let sized = character == ":" ? (2...4).contains(run) : run == 2
+                let ends = after == characters.count || characters[after] == " "
+
+                guard sized, ends, index > leading else {
+                    index += run
+                    continue
+                }
+
+                var text = String(characters[leading..<index])
+                while let last = text.last, last == " " || last == "\t" {
+                    text.removeLast()
+                }
+                guard !text.isEmpty else {
+                    return nil
+                }
+
+                let startColumn = leading + 1
+                let startOffset = line.range.start.offset + leading
+                let title = Title(
+                    text: text,
+                    range: SourceRange(
+                        start: SourceLocation(
+                            offset: startOffset, line: line.number, column: startColumn),
+                        end: SourceLocation(
+                            offset: startOffset + text.utf16.count,
+                            line: line.number,
+                            column: startColumn + text.utf16.count
+                        )
+                    )
+                )
+                return (String(repeating: String(character), count: run), title)
+            }
+
+            return nil
         }
     }
 }

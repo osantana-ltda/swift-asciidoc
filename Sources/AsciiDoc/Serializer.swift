@@ -141,8 +141,15 @@ public enum Serializer {
             }
             emitChildren(of: block, into: &emitter)
 
-        case .paragraph, .attributeEntry, .unparsed, .listItem, .tableCell:
+        case .paragraph, .attributeEntry, .unparsed, .tableCell:
             emitLines(of: block, into: &emitter)
+
+        case .listItem:
+            // The item's own text, then whatever hangs off it: a nested list,
+            // or a block attached with `+`, which carries that marker on its
+            // prelude.
+            emitLines(of: block, into: &emitter)
+            emitChildren(of: block, into: &emitter)
 
         case .admonition(let variant):
             emitAdmonition(block, variant: variant, into: &emitter)
@@ -179,7 +186,7 @@ public enum Serializer {
                 }
             }
 
-        case .unorderedList, .orderedList:
+        case .unorderedList, .orderedList, .descriptionList:
             emitChildren(of: block, into: &emitter)
 
         case .tableRow:
@@ -317,11 +324,16 @@ public enum Serializer {
             return
         }
 
-        // Canonical, for built trees. Sections carry their title in the
-        // heading line, not in a `.Title` row.
-        if case .section = block.kind {
-        } else if let title = block.title {
-            emitter.emit(text: ".\(title.text)")
+        // Canonical, for built trees. Two kinds carry their title inside their
+        // own text rather than in a `.Title` row: a section's heading line, and
+        // a description item's term, which stands before its `::`.
+        switch block.kind {
+        case .section, .listItem:
+            break
+        default:
+            if let title = block.title {
+                emitter.emit(text: ".\(title.text)")
+            }
         }
 
         if let line = canonicalAttributeLine(block.attributes) {
@@ -374,14 +386,17 @@ public enum Serializer {
         if let first = block.prelude.first {
             return first.number == 0
         }
-        if block.title != nil || !block.attributes.isEmpty {
-            return true
-        }
         if let opening = block.opening {
             return opening.number == 0
         }
         if let first = block.lines.first {
             return first.number == 0
+        }
+        // A title or an attribute list with no line of its own behind it can
+        // only have been built — a description item's term is written inside
+        // the item's own line, and that line was checked above.
+        if block.title != nil || !block.attributes.isEmpty {
+            return true
         }
         if let firstChild = block.blocks.first {
             return startsSynthetic(firstChild)

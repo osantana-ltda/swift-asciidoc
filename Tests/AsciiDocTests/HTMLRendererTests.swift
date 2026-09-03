@@ -61,6 +61,42 @@ private func html(_ source: String) -> String {
     #expect(out.contains("Mind this."))
 }
 
+@Test func nestedListsRenderInsideTheirItem() {
+    let out = html("= T\n\n* one\n** deep\n* two\n")
+
+    // The nested list closes before its parent item does.
+    #expect(out.contains("<li>one<ul>\n<li>deep</li>\n</ul>\n</li>"))
+    #expect(out.contains("<li>two</li>"))
+}
+
+@Test func descriptionListsBecomeTermsAndDefinitions() {
+    let out = html("= T\n\nTerm:: A definition\nOther:: Second one\n")
+
+    #expect(out.contains("<dl>"))
+    #expect(out.contains("<dt>Term</dt>"))
+    #expect(out.contains("<dd>A definition</dd>"))
+    #expect(out.contains("<dt>Other</dt>"))
+}
+
+@Test func aTermRendersItsInlineFormatting() {
+    let out = html("= T\n\n`--flag`:: What it does\n")
+    #expect(out.contains("<dt><code>--flag</code></dt>"))
+}
+
+@Test func anAttachedBlockRendersInsideItsItem() {
+    let out = html("= T\n\n* item\n+\n----\ncode\n----\n* next\n")
+
+    #expect(out.contains("<li>item<pre><code>code</code></pre>\n</li>"))
+    #expect(out.contains("<li>next</li>"))
+}
+
+@Test func numberedItemsShedTheirMarker() {
+    let out = html("= T\n\n1. First\n2. Second\n")
+
+    #expect(out.contains("<li>First</li>"))
+    #expect(!out.contains("1."))
+}
+
 @Test func listItemsRenderTheirInlineFormattingOnce() {
     let out = html("= T\n\n* A *bold* item\n* Plain item\n")
     #expect(out.contains("<li>A <strong>bold</strong> item</li>"))

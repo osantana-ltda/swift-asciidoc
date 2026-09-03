@@ -1,0 +1,83 @@
+{
+  "blocks": [
+    {
+      "items": [
+        {
+          "location": [
+            {
+              "col": 1,
+              "line": 1
+            },
+            {
+              "col": 19,
+              "line": 1
+            }
+          ],
+          "marker": "::",
+          "name": "listItem",
+          "principal": [
+            {
+              "location": [
+                {
+                  "col": 8,
+                  "line": 1
+                },
+                {
+                  "col": 19,
+                  "line": 1
+                }
+              ],
+              "name": "text",
+              "type": "string",
+              "value": "A definition"
+            }
+          ],
+          "terms": [
+            [
+              {
+                "location": [
+                  {
+                    "col": 1,
+                    "line": 1
+                  },
+                  {
+                    "col": 4,
+                    "line": 1
+                  }
+                ],
+                "name": "text",
+                "type": "string",
+                "value": "Term"
+              }
+            ]
+          ],
+          "type": "block"
+        }
+      ],
+      "location": [
+        {
+          "col": 1,
+          "line": 1
+        },
+        {
+          "col": 19,
+          "line": 1
+        }
+      ],
+      "name": "dlist",
+      "type": "block"
+    }
+  ],
+  "location": [
+    {
+      "col": 1,
+      "line": 1
+    },
+    {
+      "col": 19,
+      "line": 1
+    }
+  ],
+  "name": "document",
+  "type": "block"
+}

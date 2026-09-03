@@ -166,6 +166,7 @@ func describe(_ kind: Block.Kind) -> String {
     case .tableCell: "cell"
     case .unorderedList: "ulist"
     case .orderedList: "olist"
+    case .descriptionList: "dlist"
     case .listItem: "item"
     case .comment: "comment"
     case .attributeEntry: "attribute"

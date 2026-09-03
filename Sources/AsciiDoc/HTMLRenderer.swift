@@ -162,9 +162,23 @@ public enum HTMLRenderer {
         case .orderedList:
             return "<ol>\n\(render(block.blocks, attributes: attributes))</ol>\n"
 
+        case .descriptionList:
+            return "<dl>\n\(render(block.blocks, attributes: attributes))</dl>\n"
+
         case .listItem:
-            return
-                "<li>\(inlineHTML(of: strippedItemLines(block.lines), attributes: attributes))</li>\n"
+            let body = inlineHTML(
+                of: strippedItemLines(block.lines, term: block.title?.text),
+                attributes: attributes
+            )
+            // Whatever hangs off the item — a nested list, a block attached
+            // with `+` — renders inside it, not after it.
+            let nested = render(block.blocks, attributes: attributes)
+
+            guard let term = block.title else {
+                return "<li>\(body)\(nested)</li>\n"
+            }
+            let label = inlineHTML(of: term.text, attributes: attributes)
+            return "<dt>\(label)</dt>\n<dd>\(body)\(nested)</dd>\n"
 
         case .comment, .attributeEntry:
             // Not content: comments address the authors, attribute entries
@@ -337,15 +351,29 @@ public enum HTMLRenderer {
 
     /// List item lines carry their marker; the first line sheds it. Returns
     /// plain item text — the caller renders the inlines exactly once.
-    static func strippedItemLines(_ lines: [SourceLine]) -> String {
+    ///
+    /// `term` is a description item's label: there the marker trails the term
+    /// rather than opening the line, so what is shed is everything up to and
+    /// including it.
+    static func strippedItemLines(_ lines: [SourceLine], term: String? = nil) -> String {
         guard let first = lines.first else {
             return ""
         }
-        var text = first.text
-        let trimmed = text.drop(while: { $0 == " " })
-        let marker = trimmed.prefix { $0 == "*" || $0 == "." || $0 == "-" }
-        if !marker.isEmpty, trimmed.dropFirst(marker.count).first == " " {
-            text = String(trimmed.dropFirst(marker.count + 1))
+        var text = String(first.text.drop { $0 == " " || $0 == "\t" })
+
+        if let term {
+            // Measured off the term itself, so a term holding a colon of its
+            // own is shed whole rather than cut at the wrong place.
+            text = String(text.dropFirst(term.count))
+            text = String(text.drop { $0 == " " || $0 == "\t" })
+            text = String(text.drop { $0 == ":" || $0 == ";" })
+            text = String(text.drop { $0 == " " })
+            return ([text] + lines.dropFirst().map(\.text)).joined(separator: "\n")
+        }
+
+        let bullet = text.prefix { $0 == "*" || $0 == "." || $0 == "-" || $0.isNumber }
+        if !bullet.isEmpty, text.dropFirst(bullet.count).first == " " {
+            text = String(text.dropFirst(bullet.count + 1))
         }
         return ([text] + lines.dropFirst().map(\.text)).joined(separator: "\n")
     }
