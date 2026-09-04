@@ -34,7 +34,9 @@ cd "$(dirname "$0")/.."
 swift build -c release >/dev/null
 adapter="$PWD/.build/release/asciidoc-tck-adapter"
 
-files=$(find "$corpus" -name "*.adoc" -not -path "*/.git/*" | sort)
+# Three extensions in the wild: Pro Git uses .asc, O'Reilly books .asciidoc.
+files=$(find "$corpus" \( -name "*.adoc" -o -name "*.asciidoc" -o -name "*.asc" \) \
+    -not -path "*/.git/*" | sort)
 count=$(echo "$files" | grep -c "" || true)
 echo "corpus: $count files, $(echo "$files" | xargs cat | grep -c "" || true) lines"
 echo
@@ -77,6 +79,7 @@ unparsed=$(echo "$census" | awk '$2 == "unparsed" { print $1 }')
 echo "unmodelled constructs: ${unparsed:-0}"
 echo
 echo "what the book is made of:"
-echo "$census" | grep -vE "^ *[0-9]+ :" | head -25
+# Header lines (`title:`, `author:`) and attribute entries are not blocks.
+echo "$census" | grep -vE "^ *[0-9]+ (:|title:|author:)" | head -25
 
 [ -z "$broken" ] || exit 1
