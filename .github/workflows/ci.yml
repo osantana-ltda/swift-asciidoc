@@ -1,0 +1,73 @@
+# Every job here was run locally before it was written: Linux in the same
+# `swift:6.3` container this uses, macOS on the machine the package is
+# developed on. None of it is a guess about what a runner might do.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The claim `Package.swift` makes — no platform floor, builds anywhere the
+  # toolchain runs — and the only job that can check it. Runs in the official
+  # Swift container rather than on a macOS runner, which is also why it is
+  # free and quick.
+  linux:
+    runs-on: ubuntu-latest
+    container: swift:6.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
+
+      # The fixtures are byte-exact, so they are the one thing that would
+      # catch a platform difference in string handling reaching the output.
+      - name: Fixtures round-trip through the release binary
+        run: |
+          swift build -c release
+          status=0
+          for fixture in $(find Tests -name '*-input.adoc' | sort); do
+            if ! ./.build/release/asciidoc-tck-adapter --roundtrip < "$fixture" \
+                | diff -q - "$fixture" > /dev/null; then
+              echo "::error file=$fixture::round trip diverged"
+              status=1
+            fi
+          done
+          exit $status
+
+  # The platform the package is written on, and the one the editor uses it
+  # from. Apple's Foundation is a different implementation from the one the
+  # Linux job exercises, which is the point of running both.
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # `Package.swift` asks for tools version 6.3, and runner images trail
+      # the current Xcode by some weeks. Selecting the newest installed one
+      # and printing what that turned out to be means a toolchain that is too
+      # old says so in the log rather than in a cryptic build error — and no
+      # third-party action is needed to do it.
+      - name: Select the newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          newest=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select --switch "$newest"
+          xcodebuild -version
+          swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
