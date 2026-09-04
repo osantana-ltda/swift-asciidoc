@@ -209,10 +209,18 @@ fill the gap:
 
 ## Repository
 
-This package currently lives inside the Bookled repository while the two change
-together, and will be extracted into its own repository once that settles. It
-must build, test and make sense on its own in the meantime — nothing here may
-depend on the surrounding application.
+This is the package's own repository, and what you should depend on. Its history
+is derived from the Bookled repository, where the package is still developed:
+the two are written together, so keeping one working copy avoids tagging a
+release between every parser change and the editor that needs it. The split is
+recomputed from those commits and pushed here — never edited on this side.
+
+Nothing here depends on the surrounding application. It builds, tests and makes
+sense on its own, and that is checked by cloning this repository into an empty
+directory and running its tests there.
+
+Contributions are welcome as issues and pull requests here; see the licence note
+below before writing code.
 
 ## Licence
 
