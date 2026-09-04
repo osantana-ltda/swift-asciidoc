@@ -13,8 +13,8 @@ private func html(_ source: String) -> String {
     let out = html("= Book Title\nAn Author\n\n== Chapter\n\nText.\n\n=== Deep\n")
     #expect(out.contains("<h1>Book Title</h1>"))
     #expect(out.contains("<p class=\"author\">An Author</p>"))
-    #expect(out.contains("<h2>Chapter</h2>"))
-    #expect(out.contains("<h3>Deep</h3>"))
+    #expect(out.contains("<h2 id=\"_chapter\">Chapter</h2>"))
+    #expect(out.contains("<h3 id=\"_deep\">Deep</h3>"))
     #expect(out.contains("<p>Text.</p>"))
 }
 
@@ -159,8 +159,64 @@ private func html(_ source: String) -> String {
             + "See <<the-spot>> and <<the-spot,that place>>.\n")
 
     #expect(out.contains("<span id=\"the-spot\">The Spot</span>"))
-    #expect(out.contains("<a href=\"#the-spot\">the-spot</a>"))
+    // Without a label the reference shows the anchor's own text.
+    #expect(out.contains("<a href=\"#the-spot\">The Spot</a>"))
     #expect(out.contains("<a href=\"#the-spot\">that place</a>"))
+}
+
+@Test func sectionsGetConventionalIdsAndReferencesShowTheirTitles() {
+    let out = html(
+        "= T\n\n== Building the Toolchain\n\nSee <<_building_the_toolchain>>.\n\n"
+            + "[#custom]\n== Named\n\nAnd <<custom>>, and <<nowhere>>.\n")
+
+    #expect(out.contains("<h2 id=\"_building_the_toolchain\">Building the Toolchain</h2>"))
+    #expect(out.contains("<a href=\"#_building_the_toolchain\">Building the Toolchain</a>"))
+    #expect(out.contains("<h2 id=\"custom\">Named</h2>"))
+    #expect(out.contains("<a href=\"#custom\">Named</a>"))
+    // A target nobody declared still links, and says what it was given.
+    #expect(out.contains("<a href=\"#nowhere\">nowhere</a>"))
+}
+
+@Test func aSharedContextResolvesReferencesAcrossDocuments() {
+    let one = Parser.parse("= One\n\n== Setup\n\nText.\n")
+    let two = Parser.parse("= Two\n\nBack to <<_setup>>.\n")
+    let context = RenderContext(anchors: HTMLRenderer.anchors(in: one))
+
+    let out = HTMLRenderer.render(two, context: context)
+    #expect(out.contains("<a href=\"#_setup\">Setup</a>"))
+}
+
+@Test func footnotesAreNumberedAndCollectedAtTheEnd() {
+    let out = html(
+        "= T\n\nFirst.footnote:[One *bold* note.] Then.footnote:disc[Named.]"
+            + " Again.footnote:disc[]\n")
+
+    #expect(
+        out.contains(
+            "<sup class=\"footnote\"><a id=\"_footnoteref_1_1\" href=\"#_footnote_1_1\">1</a></sup>"
+        ))
+    #expect(out.contains("href=\"#_footnote_1_2\">2</a></sup> Again."))
+    // The named note is referred to again, not defined again.
+    #expect(out.components(separatedBy: "class=\"footnote\" id=").count == 3)
+    #expect(out.contains("<div class=\"footnote\" id=\"_footnote_1_1\">"))
+    #expect(out.contains("1</a>. One <strong>bold</strong> note.</div>"))
+    #expect(out.hasSuffix("</div>\n</div>\n"))
+}
+
+@Test func imagesResolveUnderImagesdirAndTheContextBase() {
+    let out = html(
+        "= T\n:imagesdir: figures\n\nimage::plot.png[A plot]\n\n"
+            + "Inline image:icon.svg[] and image:/abs.png[] and image:https://x/y.png[].\n")
+
+    #expect(out.contains("<img src=\"figures/plot.png\" alt=\"A plot\">"))
+    #expect(out.contains("<img src=\"figures/icon.svg\" alt=\"icon.svg\">"))
+    #expect(out.contains("<img src=\"/abs.png\""))
+    #expect(out.contains("<img src=\"https://x/y.png\""))
+
+    let based = HTMLRenderer.render(
+        Parser.parse("= T\n\nimage::plot.png[]\n"),
+        context: RenderContext(imageBase: "/book/ch1"))
+    #expect(based.contains("<img src=\"/book/ch1/plot.png\""))
 }
 
 @Test func aBoundAttributeListReachesTheElement() {
