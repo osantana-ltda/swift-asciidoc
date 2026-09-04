@@ -209,18 +209,23 @@ fill the gap:
 
 ## Repository
 
-This is the package's own repository, and what you should depend on. Its history
-is derived from the Bookled repository, where the package is still developed:
-the two are written together, so keeping one working copy avoids tagging a
-release between every parser change and the editor that needs it. The split is
-recomputed from those commits and pushed here — never edited on this side.
+**This repository is a publication, not the working copy.** The package is
+developed inside the Bookled repository, where it sits beside the editor that
+drives it; the history here is recomputed from those commits and pushed, never
+edited on this side. A commit made here would be overwritten by the next push.
+
+The two are written together, which is why they share a working copy: a URL
+dependency would mean a tag and a resolve between every parser change and the
+editor that needs it.
 
 Nothing here depends on the surrounding application. It builds, tests and makes
 sense on its own, and that is checked by cloning this repository into an empty
 directory and running its tests there.
 
-Contributions are welcome as issues and pull requests here; see the licence note
-below before writing code.
+**There are no releases yet, and no tags.** Depending on this from another
+project means pinning a commit, which is a thing to do with your eyes open. If
+you want a release, say so in an issue — that is a decision waiting for a reason
+rather than a plan.
 
 ## Licence
 
@@ -229,7 +234,11 @@ below before writing code.
 The package is dual-licensed: it is published under AGPL-3.0, and the Bookled
 application uses it under separate terms granted by the copyright holder.
 
-**Contributions require a contributor licence agreement.** Dual licensing depends
-on single ownership of the copyright — code merged without a CLA cannot be
-relicensed, so it cannot be accepted. If you are planning a contribution, raise
-it before writing it.
+**Pull requests cannot be accepted at the moment.** Dual licensing depends on
+single ownership of the copyright, so merged code needs a contributor licence
+agreement, and there is not one yet. A pull request opened today would have to
+be declined however good it is — which is a waste of your time, so this says it
+up front rather than in a reply.
+
+Issues are welcome and useful: a bug report, a construct the parser gets wrong,
+a document it fails to round-trip. Those need no agreement from anyone.
