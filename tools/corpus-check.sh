@@ -35,7 +35,9 @@ swift build -c release >/dev/null
 adapter="$PWD/.build/release/asciidoc-tck-adapter"
 
 # Three extensions in the wild: Pro Git uses .asc, O'Reilly books .asciidoc.
-files=$(find "$corpus" \( -name "*.adoc" -o -name "*.asciidoc" -o -name "*.asc" \) \
+# Regular files only: a sparse checkout leaves symlinks pointing at nothing,
+# and a file that cannot be read is not a round-trip result either way.
+files=$(find "$corpus" -type f \( -name "*.adoc" -o -name "*.asciidoc" -o -name "*.asc" \) \
     -not -path "*/.git/*" | sort)
 count=$(echo "$files" | grep -c "" || true)
 echo "corpus: $count files, $(echo "$files" | xargs cat | grep -c "" || true) lines"

@@ -444,6 +444,39 @@ import Testing
     #expect(attached[0].prelude.first?.text == "+")
 }
 
+// MARK: - Style over delimiter
+
+@Test func aSourceStyleMakesAnOpenBlockVerbatim() {
+    // Found in the RISC-V manual: assembly in `[source,asm]` over `--`. The
+    // kind was already a listing, but the content was still parsed as
+    // blocks, and `.size strcmp` became a block title.
+    let document = Parser.parse("[source,asm]\n--\n.size   strcmp, .-strcmp\n  ret\n--\n")
+
+    let block = document.blocks[0]
+    #expect(block.kind == .listing)
+    #expect(block.blocks.isEmpty)
+    #expect(block.lines.map(\.text) == [".size   strcmp, .-strcmp", "  ret"])
+}
+
+@Test func anAdmonitionStyleKeepsAnExampleBlockCompound() {
+    // The first version of the rule above dropped the `====` delimiters of
+    // every `[NOTE]` example block in the RISC-V manual — 115 files.
+    let document = Parser.parse("[NOTE]\n====\nMind this.\n====\n")
+
+    let block = document.blocks[0]
+    #expect(block.kind == .admonition(variant: "note"))
+    #expect(block.blocks.first?.kind == .paragraph)
+    #expect(Serializer.serialize(document) == "[NOTE]\n====\nMind this.\n====\n")
+}
+
+@Test func aQuoteStyleMakesAListingCompound() {
+    let document = Parser.parse("[quote]\n----\nA quoted paragraph.\n----\n")
+
+    let block = document.blocks[0]
+    #expect(block.kind == .quote)
+    #expect(block.blocks.first?.kind == .paragraph)
+}
+
 // MARK: - Delimiter lengths
 
 @Test func aDelimitedBlockClosesOnlyOnTheLineThatOpenedIt() {

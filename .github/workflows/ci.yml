@@ -55,17 +55,59 @@ jobs:
   # non-zero on any round-trip difference beyond the two documented
   # normalizations, and the census goes to the job summary so a construct
   # count that creeps up is visible without opening the log.
+  #
+  # One job per book, and a failing clone fails only its own: a third party
+  # renaming a repository must not hide a real divergence in another. Each
+  # was run locally before being listed here; the numbers are the baseline.
   corpus:
     runs-on: ubuntu-latest
     container: swift:6.3
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The language's own documentation — every construct, by the
+          # people who defined it. If anything should parse, this should.
+          - book: asciidoc-lang
+            url: https://gitlab.eclipse.org/eclipse/asciidoc-lang/asciidoc-lang.git
+          - book: asciidoctor-docs
+            url: https://github.com/asciidoctor/asciidoctor.git
+            path: docs
+          # O'Reilly house style, pt-BR. Found the padded-delimiter bug.
+          - book: python-fluente
+            url: https://github.com/pythonfluente/pythonfluente2e.git
+          # The canonical Asciidoctor book, .asc extension.
+          - book: pro-git
+            url: https://github.com/progit/progit2.git
+          # O'Reilly .asciidoc, English.
+          - book: mastering-bitcoin
+            url: https://github.com/bitcoinbook/bitcoinbook.git
+          # A hardware spec: heavy tables, math, wavedrom includes. Found the
+          # style-over-delimiter bug. Carries two orphan anchors at file
+          # ends, which the census lists as `orphan`, not as unmodelled.
+          - book: riscv-isa
+            url: https://github.com/riscv/riscv-isa-manual.git
+          # 945 files of man pages and guides, the legacy-syntax stress test.
+          - book: git-docs
+            url: https://github.com/git/git.git
+            path: Documentation
+    name: corpus (${{ matrix.book }})
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch the corpus
-        run: git clone --depth 1 https://github.com/pythonfluente/pythonfluente2e /tmp/corpus
+      - name: Fetch ${{ matrix.book }}
+        run: |
+          if [ -n "${{ matrix.path }}" ]; then
+            git clone --depth 1 --filter=blob:none --sparse "${{ matrix.url }}" /tmp/corpus
+            git -C /tmp/corpus sparse-checkout set "${{ matrix.path }}"
+          else
+            git clone --depth 1 "${{ matrix.url }}" /tmp/corpus
+          fi
 
       - name: Round-trip and census
-        run: tools/corpus-check.sh /tmp/corpus | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "## ${{ matrix.book }}" >> "$GITHUB_STEP_SUMMARY"
+          tools/corpus-check.sh "/tmp/corpus/${{ matrix.path }}" | tee -a "$GITHUB_STEP_SUMMARY"
 
   # The platform the package is written on, and the one the editor uses it
   # from. Apple's Foundation is a different implementation from the one the

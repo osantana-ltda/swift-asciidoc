@@ -177,7 +177,12 @@ func describe(_ kind: Block.Kind) -> String {
 
 func dump(_ blocks: [Block], indent: Int) {
     for block in blocks {
-        var line = String(repeating: "  ", count: indent) + describe(block.kind)
+        // Metadata with no block to attach to — an anchor or title at the end
+        // of a file — is kept whole, but it is not a construct the parser
+        // failed to model, and the corpus census must not count it as one.
+        let orphan = block.kind == .unparsed && block.lines.isEmpty && !block.prelude.isEmpty
+        let label = orphan ? "orphan" : describe(block.kind)
+        var line = String(repeating: "  ", count: indent) + label
         line += "  [\(block.range.start.line)–\(block.range.end.line)]"
 
         if let title = block.title {

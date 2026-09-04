@@ -46,6 +46,8 @@ private let roundTripSources: [String] = [
     "[source,sh]\nnpm ci\nnpm test\n",
     "[quote]\nA styled quote paragraph.\n",
     "[NOTE]\nStyled admonition, no label.\n",
+    "[NOTE]\n====\nAn admonition over an example block.\n====\n",
+    "[source,asm]\n--\n.size   strcmp, .-strcmp\n--\n",
     // Prefix admonitions.
     "TIP: An admonition, wrapped\nonto a second line.\n",
     "NOTE: Short.\n",

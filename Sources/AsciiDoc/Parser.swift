@@ -343,8 +343,24 @@ extension Parser {
             }
 
             // A compound block holds blocks; a verbatim one holds its lines
-            // exactly as written, which is the whole point of it.
-            if delimiter.isCompound {
+            // exactly as written, which is the whole point of it. The style
+            // decides, not the delimiter: `[source]` over `--` is a listing,
+            // and parsing assembly as paragraphs turned `.size` into a block
+            // title. Found by running the RISC-V manual through the parser.
+            //
+            // Only a verbatim style takes that away, though. `[NOTE]` over
+            // `====` is an admonition, which is not in the compound list, and
+            // treating its delimiters as content dropped them on the way out.
+            let compound: Bool
+            switch metadata.attributes.style.flatMap(Metadata.kind(forStyle:)) {
+            case .listing?, .literal?, .passthrough?:
+                compound = false
+            case .some(let styled):
+                compound = Metadata.isCompound(styled) || delimiter.isCompound
+            case nil:
+                compound = delimiter.isCompound
+            }
+            if compound {
                 var inner = State(lines: content)
                 return metadata.finish(
                     kind: delimiter.kind,
