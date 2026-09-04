@@ -11,10 +11,20 @@ public final class RenderContext {
     /// Reference text per anchor id — a section's title, an inline anchor's
     /// reftext — across every document rendered with this context.
     public var anchors: [String: String]
+    /// The file each anchor lives in, for a book split across files (EPUB):
+    /// a reference into another file carries that file's name before the
+    /// fragment. Empty when the book is one page.
+    public var anchorFiles: [String: String] = [:]
+    /// The file being rendered, matched against `anchorFiles`.
+    public var currentFile: String?
     /// Where a relative image target resolves once `imagesdir` is applied:
     /// the chapter's directory, as a path or URL prefix. Nil leaves it as
     /// written.
     public var imageBase: String?
+    /// Takes over from `imageBase` when set: given the target after
+    /// `imagesdir`, answers the path to write — a packager copying images
+    /// into an archive lives here.
+    public var imageResolver: ((String) -> String)?
 
     var footnotes: [(id: String, html: String)] = []
     var namedFootnotes: [String: Int] = [:]
@@ -80,7 +90,7 @@ public enum HTMLRenderer {
         // Footnotes close the document they belong to, numbered from one
         // per document the way books number them per chapter.
         if !context.footnotes.isEmpty {
-            html += "<div class=\"footnotes\">\n<hr>\n"
+            html += "<div class=\"footnotes\">\n<hr />\n"
             for note in context.footnotes {
                 html += "<div class=\"footnote\" id=\"\(note.id)\">\(note.html)</div>\n"
             }
@@ -119,6 +129,30 @@ public enum HTMLRenderer {
         }
         walk(document.blocks)
         return anchors
+    }
+
+    public struct Heading: Equatable, Sendable {
+        /// AsciiDoc section level: 1 for `==`.
+        public let level: Int
+        public let id: String
+        public let title: String
+    }
+
+    /// The document's sections in order, as a table of contents reads them.
+    public static func outline(of document: Document) -> [Heading] {
+        var headings: [Heading] = []
+        func walk(_ blocks: [Block]) {
+            for block in blocks {
+                if case .section(let level) = block.kind {
+                    headings.append(
+                        Heading(
+                            level: level, id: sectionID(of: block), title: block.title?.text ?? ""))
+                }
+                walk(block.blocks)
+            }
+        }
+        walk(document.blocks)
+        return headings
     }
 
     /// A section's id: the one it was given, else derived from its title the
@@ -447,7 +481,8 @@ public enum HTMLRenderer {
                 attributes += " title=\"\(escapeAttribute(title))\""
             }
             attributes += htmlAttributes(id: list.id, roles: list.roles)
-            return "<img\(attributes)>"
+            // Self-closed so the same markup is XHTML for an EPUB.
+            return "<img\(attributes) />"
 
         case "kbd":
             return "<kbd>\(escape(macro.target.isEmpty ? macro.attributes : macro.target))</kbd>"
@@ -465,7 +500,11 @@ public enum HTMLRenderer {
             } else {
                 label = escape(macro.target)
             }
-            return "<a href=\"#\(escapeAttribute(macro.target))\">\(label)</a>"
+            var href = "#\(macro.target)"
+            if let file = context.anchorFiles[macro.target], file != context.currentFile {
+                href = file + href
+            }
+            return "<a href=\"\(escapeAttribute(href))\">\(label)</a>"
 
         case "anchor":
             return "<span id=\"\(escapeAttribute(macro.target))\"></span>"
@@ -530,6 +569,9 @@ public enum HTMLRenderer {
         var path = target
         if !isAbsolute(path), let imagesdir = context.attributes["imagesdir"], !imagesdir.isEmpty {
             path = join(imagesdir, path)
+        }
+        if let resolver = context.imageResolver {
+            return resolver(path)
         }
         if !isAbsolute(path), let base = context.imageBase {
             path = join(base, path)

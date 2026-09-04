@@ -184,6 +184,27 @@ private func html(_ source: String) -> String {
 
     let out = HTMLRenderer.render(two, context: context)
     #expect(out.contains("<a href=\"#_setup\">Setup</a>"))
+
+    // Split across files, the reference names the other file first.
+    context.anchorFiles = ["_setup": "one.xhtml"]
+    context.currentFile = "two.xhtml"
+    #expect(HTMLRenderer.render(two, context: context).contains("href=\"one.xhtml#_setup\""))
+    context.currentFile = "one.xhtml"
+    #expect(HTMLRenderer.render(two, context: context).contains("href=\"#_setup\""))
+}
+
+@Test func theOutlineListsSectionsInOrderAndAnImageResolverTakesOver() {
+    let document = Parser.parse("= T\n\n== A\n\n=== A.1\n\nimage::x.png[]\n\n== B\n")
+    #expect(
+        HTMLRenderer.outline(of: document) == [
+            HTMLRenderer.Heading(level: 1, id: "_a", title: "A"),
+            HTMLRenderer.Heading(level: 2, id: "_a_1", title: "A.1"),
+            HTMLRenderer.Heading(level: 1, id: "_b", title: "B"),
+        ])
+
+    let context = RenderContext(imageBase: "/ignored")
+    context.imageResolver = { "images/" + $0 }
+    #expect(HTMLRenderer.render(document, context: context).contains("src=\"images/x.png\""))
 }
 
 @Test func footnotesAreNumberedAndCollectedAtTheEnd() {
@@ -208,8 +229,8 @@ private func html(_ source: String) -> String {
         "= T\n:imagesdir: figures\n\nimage::plot.png[A plot]\n\n"
             + "Inline image:icon.svg[] and image:/abs.png[] and image:https://x/y.png[].\n")
 
-    #expect(out.contains("<img src=\"figures/plot.png\" alt=\"A plot\">"))
-    #expect(out.contains("<img src=\"figures/icon.svg\" alt=\"icon.svg\">"))
+    #expect(out.contains("<img src=\"figures/plot.png\" alt=\"A plot\" />"))
+    #expect(out.contains("<img src=\"figures/icon.svg\" alt=\"icon.svg\" />"))
     #expect(out.contains("<img src=\"/abs.png\""))
     #expect(out.contains("<img src=\"https://x/y.png\""))
 
