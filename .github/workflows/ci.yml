@@ -8,6 +8,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # The corpus job clones a third party's repository; a weekly run catches
+  # an upstream change (or outage) that no push here would have triggered.
+  schedule:
+    - cron: "0 6 * * 1"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -44,6 +48,24 @@ jobs:
             fi
           done
           exit $status
+
+  # A published book, which contains what our fixtures did not think of. Not
+  # vendored — Python Fluente is CC BY-NC-ND, fine to run against, not to
+  # redistribute — so it is cloned shallow on every run. The script exits
+  # non-zero on any round-trip difference beyond the two documented
+  # normalizations, and the census goes to the job summary so a construct
+  # count that creeps up is visible without opening the log.
+  corpus:
+    runs-on: ubuntu-latest
+    container: swift:6.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the corpus
+        run: git clone --depth 1 https://github.com/pythonfluente/pythonfluente2e /tmp/corpus
+
+      - name: Round-trip and census
+        run: tools/corpus-check.sh /tmp/corpus | tee -a "$GITHUB_STEP_SUMMARY"
 
   # The platform the package is written on, and the one the editor uses it
   # from. Apple's Foundation is a different implementation from the one the
