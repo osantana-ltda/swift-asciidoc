@@ -25,6 +25,10 @@ public final class RenderContext {
     /// `imagesdir`, answers the path to write — a packager copying images
     /// into an archive lives here.
     public var imageResolver: ((String) -> String)?
+    /// Given a listing's code and language, answers highlighted markup —
+    /// nil for a language it does not know, and the listing stays plain.
+    /// The renderer itself knows no grammar; whoever exports plugs one in.
+    public var highlighter: ((String, String) -> String?)?
 
     var footnotes: [(id: String, html: String)] = []
     var namedFootnotes: [String: Int] = [:]
@@ -234,11 +238,7 @@ public enum HTMLRenderer {
                 + "<span>\(inlineHTML(of: block.lines, context: context))</span></aside>\n"
 
         case .listing:
-            let language =
-                block.attributes.positional.count > 1
-                ? block.attributes.positional[1] : nil
-            let cls = language.map { " class=\"language-\(escape($0))\"" } ?? ""
-            return "<pre><code\(cls)>\(escape(block.text))</code></pre>\n"
+            return listing(block, context: context)
 
         case .literal:
             return "<pre class=\"literal\">\(escape(block.text))</pre>\n"
@@ -333,6 +333,77 @@ public enum HTMLRenderer {
         case .unparsed:
             return "<pre class=\"unparsed\">\(escape(block.text))</pre>\n"
         }
+    }
+
+    /// A listing's callout markers (`<1>` at a line's end) become numbered
+    /// marks, and the code goes through the context's highlighter when the
+    /// block names a language — escaped as written when there is none, or
+    /// the highlighter does not know it.
+    static func listing(_ block: Block, context: RenderContext) -> String {
+        let language =
+            block.attributes.positional.count > 1 ? block.attributes.positional[1] : nil
+
+        // Markers come off before highlighting, which would otherwise read
+        // them as code, and go back on their line afterwards. The
+        // highlighter keeps newlines, so lines still correspond; a mark
+        // appended before a newline inside a multi-line span stays nested.
+        var callouts: [Int: [String]] = [:]
+        var lines: [String] = []
+        for (index, line) in block.text.split(separator: "\n", omittingEmptySubsequences: false)
+            .enumerated()
+        {
+            var text = String(line)
+            var numbers: [String] = []
+            while let callout = trailingCallout(in: text) {
+                numbers.insert(callout.number, at: 0)
+                text = callout.rest
+            }
+            lines.append(text)
+            if !numbers.isEmpty {
+                callouts[index] = numbers
+            }
+        }
+        let code = lines.joined(separator: "\n")
+
+        var cls = ""
+        var body = escape(code)
+        if let language {
+            cls = " class=\"language-\(escape(language))\""
+            if let highlighted = context.highlighter?(code, language) {
+                cls = " class=\"language-\(escape(language)) hljs\""
+                body = highlighted
+            }
+        }
+
+        if !callouts.isEmpty {
+            body = body.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
+                .map { index, line -> String in
+                    guard let numbers = callouts[index] else {
+                        return String(line)
+                    }
+                    let marks = numbers.map { "<b class=\"conum\">(\($0))</b>" }.joined(
+                        separator: " ")
+                    return line + " " + marks
+                }
+                .joined(separator: "\n")
+        }
+        return "<pre><code\(cls)>\(body)</code></pre>\n"
+    }
+
+    /// `text <3>` → ("3", "text"); the auto-numbered `<.>` counts too.
+    static func trailingCallout(in text: String) -> (number: String, rest: String)? {
+        guard text.hasSuffix(">"), let open = text.lastIndex(of: "<") else {
+            return nil
+        }
+        let number = text[text.index(after: open)..<text.index(before: text.endIndex)]
+        guard !number.isEmpty, number == "." || number.allSatisfy(\.isNumber) else {
+            return nil
+        }
+        var rest = String(text[..<open])
+        while rest.hasSuffix(" ") || rest.hasSuffix("\t") {
+            rest.removeLast()
+        }
+        return (String(number), rest)
     }
 
     /// One cell, wearing its specifier: spans become attributes, alignments

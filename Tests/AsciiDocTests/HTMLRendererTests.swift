@@ -51,6 +51,29 @@ private func html(_ source: String) -> String {
     #expect(out.contains("<pre><code class=\"language-swift\">let a = b &lt; c</code></pre>"))
 }
 
+@Test func aHighlighterTakesTheCodeAndCalloutsStayOutOfIt() {
+    let document = Parser.parse(
+        "= T\n\n[source,swift]\n----\nlet a = 1 <1>\nlet b = 2 <2> <3>\n----\n\n"
+            + "[source,nosuch]\n----\nplain <1>\n----\n")
+    let context = RenderContext()
+    var seen: [(String, String)] = []
+    context.highlighter = { code, language in
+        seen.append((code, language))
+        return language == "swift"
+            ? "<span class=\"hljs-keyword\">let</span> a = 1\nlet b = 2" : nil
+    }
+
+    let out = HTMLRenderer.render(document, context: context)
+    #expect(seen.map(\.0) == ["let a = 1\nlet b = 2", "plain"])
+    #expect(
+        out.contains(
+            "<code class=\"language-swift hljs\"><span class=\"hljs-keyword\">let</span> a = 1"
+                + " <b class=\"conum\">(1)</b>\nlet b = 2 <b class=\"conum\">(2)</b> <b class=\"conum\">(3)</b></code>"
+        ))
+    // Unknown to the highlighter: escaped as written, marks still numbered.
+    #expect(out.contains("<code class=\"language-nosuch\">plain <b class=\"conum\">(1)</b></code>"))
+}
+
 @Test func quotesListsAndAdmonitionsRender() {
     let out = html(
         "= T\n\n____\nQuoted words.\n____\n\n* First item\n* Second item\n\nNOTE: Mind this.\n")
