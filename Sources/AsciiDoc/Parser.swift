@@ -184,6 +184,13 @@ extension Parser {
                 if let level = Self.sectionLevel(line), let limit, level <= limit {
                     break
                 }
+                // The heading may sit behind its own metadata — `[appendix]`,
+                // a `.Title`, an anchor. Those lines belong to the heading,
+                // so the closing decision has to look past them, or an
+                // appendix nests inside the appendix before it.
+                if let limit, let level = upcomingSectionLevel(), level <= limit {
+                    break
+                }
 
                 guard let block = parseBlock() else {
                     break
@@ -192,6 +199,20 @@ extension Parser {
             }
 
             return blocks
+        }
+
+        /// The level of the section heading that follows the metadata lines
+        /// at the cursor, without consuming anything; nil when what follows
+        /// is not a heading.
+        func upcomingSectionLevel() -> Int? {
+            var probe = self
+            var metadata = Metadata()
+            metadata.collect(from: &probe)
+            guard metadata.start != nil else {
+                return nil
+            }
+            probe.skipBlankLines()
+            return probe.current.flatMap(Self.sectionLevel)
         }
 
         mutating func parseBlock() -> Block? {

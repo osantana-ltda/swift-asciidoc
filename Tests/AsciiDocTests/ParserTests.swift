@@ -101,6 +101,36 @@ import Testing
     #expect(document.blocks[1].title?.text == "Two")
 }
 
+/// A heading behind its own attribute line closes the section before it
+/// like any other heading of that level — two appendices are siblings, not
+/// one inside the other.
+@Test func aHeadingBehindMetadataStillClosesTheSectionBeforeIt() {
+    let document = Parser.parse(
+        """
+        = Title
+
+        [appendix]
+        == A
+
+        Alpha.
+
+        .Named
+        [appendix]
+        == B
+
+        [[anchor]]
+        == C
+
+        Gamma.
+        """
+    )
+
+    #expect(document.blocks.map { $0.title?.text } == ["A", "B", "C"])
+    #expect(document.blocks.allSatisfy { $0.kind == .section(level: 1) })
+    #expect(document.blocks[1].attributes.style == "appendix")
+    #expect(document.blocks[0].blocks.count == 1)
+}
+
 @Test func aSectionCoversItsContent() {
     let source = """
         == One
