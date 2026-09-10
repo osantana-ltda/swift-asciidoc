@@ -12,9 +12,9 @@ import Foundation
 //
 // The default mode is the adapter for the Eclipse AsciiDoc Technology
 // Compatibility Kit: the harness sends a JSON object on stdin and expects the
-// Abstract Semantic Graph on stdout. That encoding is not implemented yet, so
-// the adapter exits non-zero — reporting success without it would make a
-// conformance report meaningless.
+// Abstract Semantic Graph on stdout, which `AbstractSemanticGraph` encodes.
+// `--roundtrip` serializes stdin back out for byte comparison, and
+// `--bench-reparse` measures the incremental parser at book scale.
 
 // Benchmark: full parse against incremental reparse at book scale, on a
 // generated document. Needs no input.

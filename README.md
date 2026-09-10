@@ -1,7 +1,8 @@
 # swift-asciidoc
 
-An AsciiDoc parser and serializer in Swift, with source locations, incremental
-reparsing, and conformance to the Eclipse AsciiDoc Language specification.
+An AsciiDoc parser, serializer and HTML renderer in Swift, with source
+locations, incremental reparsing, and conformance to the Eclipse AsciiDoc
+Language specification.
 
 There is no native Swift AsciiDoc implementation today. This is intended to
 become one, usable by any Swift project rather than only by the editor it is
@@ -38,28 +39,38 @@ The TCK repository's own documents — 29 files, including its README with every
 construct in it — round-trip byte-identically.
 
 `Parser.parse(_:)` returns a document of nested blocks, each carrying its exact
-source range: document header with attribute entries, preambles, sections
-nested by level, paragraphs, admonitions, delimited blocks (listing, literal,
-quote, example, sidebar, passthrough, open, comment), tables with rows and
-cells, block titles and attribute lists including shorthand, line and block
-comments, and simple lists.
+source range: document header with authors and attribute entries, preambles,
+sections nested by level, paragraphs, admonitions, delimited blocks (listing,
+literal, quote, example, sidebar, passthrough, open, comment), tables in the
+`|===`, csv and dsv flavours with rows, cells and cell specifiers, block titles
+and attribute lists including shorthand, line and block comments, nested
+lists, description lists, list continuation, and `include::` directives as
+nodes of their own (resolving them is the consumer's job — a preprocessor is
+a build step, and this parser sees the file as written).
 
-Inside paragraphs, admonitions, list items and table cells,
+Inside paragraphs, admonitions, list items, titles and table cells,
 `InlineParser.parse(_:)` produces the inline tree: strong, emphasis, code, mark,
 superscript and subscript, in both constrained and unconstrained forms, nested,
-with escapes, across line breaks — plus the inline macros. `name:target[attrs]`
-parses for the known names (`link`, `mailto`, `xref`, `image`, `icon`, `kbd`,
-`btn`, `menu`, `footnote`, `pass`, `stem`, `latexmath`, `asciimath`), the way
-Asciidoctor recognises only registered macros — an unknown name stays text.
-Bare URLs become `link` macros with trailing punctuation left outside, and
+with escapes, across line breaks, attribute references, inline anchors, and
+the inline macros. `name:target[attrs]` parses for the known names (`link`,
+`mailto`, `xref`, `image`, `icon`, `kbd`, `btn`, `menu`, `footnote`, `pass`,
+`stem`, `latexmath`, `asciimath`, `anchor`), the way Asciidoctor recognises
+only registered macros — an unknown name stays text — and a macro's attribute
+list reads into positional and named attributes, id and roles. Bare URLs
+become `link` macros with trailing punctuation left outside, and
 `<<target,text>>` normalises to an `xref` macro. Every node extracts from the
 source to exactly the text it claims to cover — the property the editor's
 decoration consumes. Blocks keep their raw lines; the inline tree is derived on
 demand.
 
 Anything not modelled is kept as an `.unparsed` block rather than dropped or
-guessed at, so a table survives a round trip through a parser that does not yet
-understand tables.
+guessed at, so an unknown construct survives a round trip.
+
+`HTMLRenderer.render(_:context:)` writes a document as a semantic HTML body
+fragment: no chrome, no script, ids on sections, cross-references resolved
+through a book-wide anchor table, footnotes collected per document, images
+resolved through the context, listings handed to whatever highlighter the
+context supplies. The caller owns the page around it.
 
 ### Incremental reparsing
 
@@ -89,17 +100,19 @@ full reparse of its normalised text.
 
 ### Not yet implemented
 
-- Attribute references (`{name}`) and inline anchors — their syntax passes
-  through as text.
-- A macro's attribute list stays raw; splitting it into positional and named
-  attributes is not done yet.
-- Inline parsing of section and block titles.
-- Table cell specifiers (`2+|`, `a|`, alignments) and the csv/dsv table
-  flavours — a specifier stays as part of the cell's text.
-- Description lists and list continuation (`+`).
-- Nested lists: a deeper marker stays with the item that precedes it.
-- `include::`, `ifdef::` and the rest of the preprocessor.
-- Author and revision lines are captured verbatim, not split into fields.
+- Preprocessor conditionals: `ifdef::`, `ifndef::`, `ifeval::`.
+- Attribute substitution is header-level only: entries set mid-document do
+  not take effect for the text after them, and counters and built-in
+  attributes are not evaluated.
+- Block-level `image::`, `video::` and `stem` are read as paragraphs holding
+  the macro; the renderer handles `image::` on that basis.
+- Callout lists (`<1> explanation`) after a listing; the markers inside the
+  listing render as marks.
+- Bibliography and index sections, special section styles beyond `appendix`,
+  `preface` and `discrete` passing through as styles.
+- The revision line is captured verbatim, not split into fields.
+- Diagnostics for malformed input: the parser preserves it as `.unparsed`
+  and says nothing.
 
 ## Scope
 
@@ -109,8 +122,9 @@ This package knows AsciiDoc and nothing else:
 |---|---|
 | Lexer and incremental parser | Anything about books, chapters or projects |
 | Syntax tree with source ranges | Document identity, versioning, collaboration |
-| Abstract Semantic Graph encoding | Rendering to HTML, PDF or other outputs |
-| Deterministic serializer back to AsciiDoc | Editor concerns |
+| Abstract Semantic Graph encoding | Editor concerns |
+| Deterministic serializer back to AsciiDoc | Pages, packages and paged media: PDF, EPUB, print |
+| Semantic HTML fragment renderer | Include resolution and other build steps |
 
 The boundary is deliberate. A consumer maps between its own document model and
 this tree; nothing in the public API should be named for a particular use of
@@ -205,7 +219,16 @@ fill the gap:
 4. **Round-trip testing**, which needs no expected output at all: parse any
    real AsciiDoc document, write it back, and require the bytes to match. Now
    that the serializer exists, every `.adoc` file in the world is a test case —
-   `asciidoc-tck-adapter --roundtrip` makes it a one-line shell check.
+   `asciidoc-tck-adapter --roundtrip` makes it a one-line shell check, and
+   `tools/corpus-check.sh <book>` runs it over a checked-out book, classifying
+   any difference as the documented normalization or a defect and printing a
+   census of the constructs the book is made of.
+
+5. **A corpus of real books in CI** (`.github/workflows/ci.yml`): the AsciiDoc
+   language documentation, Asciidoctor's own docs, *Python Fluente*, *Pro
+   Git*, *Mastering Bitcoin*, the RISC-V ISA manual and git's documentation,
+   round-tripped on every push and weekly. Several parser defects were found
+   this way and nowhere else.
 
 ## Repository
 
