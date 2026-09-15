@@ -29,16 +29,16 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build
-        run: swift build
+        run: swift build -Xswiftc -warnings-as-errors
 
       - name: Test
-        run: swift test
+        run: swift test -Xswiftc -warnings-as-errors
 
       # The fixtures are byte-exact, so they are the one thing that would
       # catch a platform difference in string handling reaching the output.
       - name: Fixtures round-trip through the release binary
         run: |
-          swift build -c release
+          swift build -c release -Xswiftc -warnings-as-errors
           status=0
           for fixture in $(find Tests -name '*-input.adoc' | sort); do
             if ! ./.build/release/asciidoc-tck-adapter --roundtrip < "$fixture" \
@@ -131,7 +131,7 @@ jobs:
           swift --version
 
       - name: Build
-        run: swift build
+        run: swift build -Xswiftc -warnings-as-errors
 
       - name: Test
-        run: swift test
+        run: swift test -Xswiftc -warnings-as-errors
