@@ -29,6 +29,11 @@ private let roundTripSources: [String] = [
     "= T\n\npreamble\n\n== One\n\nAlpha.\n\n=== Deep\n\nBeta.\n\n== Two\n\nGamma.\n",
     // Delimited blocks, verbatim and compound, odd delimiter lengths.
     "[source,swift]\n----\nlet x = 1\n\n// kept verbatim\n----\n",
+    // The Markdown fence Asciidoctor accepts, with and without a language,
+    // and a longer run closed only by its own length.
+    "```python\nimport sys\n\nif x:\n    pass\n```\n\nAfter.\n",
+    "[source,python]\n```\nimport sys\n```\n",
+    "````\ncode with ``` inside\n````\n",
     "------\nlonger delimiter\n------\n",
     // A delimiter padded out to the width of the table, as a real book writes
     // it, and a mismatched one that is content rather than a close.

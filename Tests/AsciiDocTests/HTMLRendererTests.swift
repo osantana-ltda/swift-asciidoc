@@ -51,6 +51,19 @@ private func html(_ source: String) -> String {
     #expect(out.contains("<pre><code class=\"language-swift\">let a = b &lt; c</code></pre>"))
 }
 
+@Test func aMarkdownFenceIsAListingWithItsLanguage() {
+    // What Asciidoctor accepts, and what a book written with Markdown
+    // habits has: ```python is [source,python] over a listing, and the
+    // prose after the fence is prose again.
+    let out = html("= T\n\n```python\nimport sys\n\nif x:\n    pass\n```\n\nAfter.\n")
+    #expect(
+        out.contains(
+            "<pre><code class=\"language-python\">import sys\n\nif x:\n    pass</code></pre>"))
+    #expect(out.contains("<p>After.</p>"))
+    // A fence with no language is a plain listing.
+    #expect(html("= T\n\n```\nx\n```\n").contains("<pre><code>x</code></pre>"))
+}
+
 @Test func aHighlighterTakesTheCodeAndCalloutsStayOutOfIt() {
     let document = Parser.parse(
         "= T\n\n[source,swift]\n----\nlet a = 1 <1>\nlet b = 2 <2> <3>\n----\n\n"

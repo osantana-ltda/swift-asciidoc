@@ -348,6 +348,16 @@ public enum Serializer {
         if case .include = block.kind {
             return
         }
+        // A Markdown fence's language is the fence's to say: the attributes
+        // it stands for are not written out again above it.
+        if let fence = block.opening?.markdownFence, let language = fence.language,
+            block.attributes.style == "source",
+            block.attributes.positional == ["source", language],
+            block.attributes.id == nil, block.attributes.roles.isEmpty,
+            block.attributes.options.isEmpty, block.attributes.named.isEmpty
+        {
+            return
+        }
         if let line = canonicalAttributeLine(block.attributes) {
             emitter.emit(text: line)
         }

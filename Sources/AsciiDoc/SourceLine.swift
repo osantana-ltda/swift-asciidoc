@@ -36,6 +36,20 @@ public struct SourceLine: Hashable, Sendable {
     public var isBlank: Bool {
         trimmed.isEmpty
     }
+
+    /// The Markdown-style fence Asciidoctor accepts for a listing — three
+    /// backticks or more, a language after them or not: the run of
+    /// backticks, which the closing line must repeat alone, and the
+    /// language, which stands for `[source,<language>]`.
+    public var markdownFence: (run: String, language: String?)? {
+        let trimmed = trimmed
+        guard trimmed.hasPrefix("```") else {
+            return nil
+        }
+        let run = String(trimmed.prefix { $0 == "`" })
+        let language = trimmed.dropFirst(run.count).split(separator: " ").first
+        return (run, language.map(String.init))
+    }
 }
 
 public enum LineReader {

@@ -331,6 +331,13 @@ extension Parser {
                 return metadata.orphanBlock() ?? Block(kind: delimiter.kind, range: .empty)
             }
             advance()
+            var metadata = metadata
+            // ```python says what [source,python] says; an attribute list
+            // written out wins over the fence.
+            if let language = delimiter.fenceLanguage, metadata.attributes.style == nil {
+                metadata.attributes.style = "source"
+                metadata.attributes.positional = ["source", language]
+            }
 
             var content: [SourceLine] = []
             var closing: SourceLine?
@@ -924,9 +931,24 @@ extension Parser {
         let marker: String
         let kind: Block.Kind
         let isCompound: Bool
+        /// A Markdown-style fence's language — ```` ```python ```` — which
+        /// Asciidoctor reads as `[source,python]` over a listing.
+        var fenceLanguage: String?
 
         init?(line: SourceLine) {
             let trimmed = String(line.trimmed)
+
+            // The Markdown fence, which Asciidoctor accepts for a listing:
+            // three backticks or more, a language after them or not; closed
+            // by the same run of backticks alone.
+            if let fence = line.markdownFence {
+                text = fence.run
+                marker = "```"
+                kind = .listing
+                isCompound = false
+                fenceLanguage = fence.language
+                return
+            }
 
             if trimmed == "--" {
                 text = trimmed
