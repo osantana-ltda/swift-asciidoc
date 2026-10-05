@@ -162,7 +162,10 @@ public enum HTMLRenderer {
     /// A section's id: the one it was given, else derived from its title the
     /// way Asciidoctor derives it — `_building_the_toolchain` — so references
     /// written against the conventional id resolve here too.
-    static func sectionID(of block: Block) -> String {
+    /// The id a section answers to: its own `[#id]`, else the slug of its
+    /// title the way Asciidoctor makes it. Public because a cross-reference
+    /// is checked against the same ids the output carries.
+    public static func sectionID(of block: Block) -> String {
         if let id = block.attributes.id, !id.isEmpty {
             return id
         }
