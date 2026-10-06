@@ -8,6 +8,13 @@
 public final class RenderContext {
     /// The document's header attributes, lowercased; set on each render.
     public var attributes: [String: String] = [:]
+    /// The book's attributes — its master's header and the language's
+    /// attributes file — under every document's own: the captions a
+    /// chapter file never states itself.
+    public var bookAttributes: [String: String] = [:]
+    /// Figures, tables, examples and listings numbered so far in the
+    /// document rendering, for their captions.
+    var captionCounts: [String: Int] = [:]
     /// Reference text per anchor id — a section's title, an inline anchor's
     /// reftext — across every document rendered with this context.
     public var anchors: [String: String]
@@ -57,9 +64,11 @@ public enum HTMLRenderer {
         // Attribute names are case-insensitive; references resolve against
         // the lowercased header entries.
         context.attributes = Dictionary(
-            document.attributes.map { ($0.key.lowercased(), $0.value) },
+            context.bookAttributes.map { ($0.key.lowercased(), $0.value) }
+                + document.attributes.map { ($0.key.lowercased(), $0.value) },
             uniquingKeysWith: { _, last in last }
         )
+        context.captionCounts = [:]
         // The book's table wins; this document fills what it did not cover,
         // which is everything when rendering on its own.
         context.anchors.merge(anchors(in: document)) { book, _ in book }
@@ -207,7 +216,45 @@ public enum HTMLRenderer {
         guard let title = block.title, !isSection(block.kind), block.kind != .table else {
             return ""
         }
-        return "<div class=\"title\">\(inlineHTML(of: title.text, context: context))</div>\n"
+        return
+            "<div class=\"title\">\(caption(of: block, context: context))\(inlineHTML(of: title.text, context: context))</div>\n"
+    }
+
+    /// What Asciidoctor puts before a block's title: "Figure 1. ", "Table
+    /// 2. ", "Example 3. " — the word from the book's attributes, so a
+    /// Portuguese book says "Figura" — and "Listing 4. " only when the book
+    /// sets `listing-caption`. Numbered through the document.
+    static func caption(of block: Block, context: RenderContext) -> String {
+        let kind: String
+        let english: String
+        switch block.kind {
+        case .paragraph where isFigure(block):
+            (kind, english) = ("figure", "Figure")
+        case .table:
+            (kind, english) = ("table", "Table")
+        case .example:
+            (kind, english) = ("example", "Example")
+        case .listing where context.attributes["listing-caption"] != nil:
+            (kind, english) = ("listing", "Listing")
+        default:
+            return ""
+        }
+        let word = context.attributes["\(kind)-caption"] ?? english
+        guard !word.isEmpty else {
+            return ""
+        }
+        let number = (context.captionCounts[kind] ?? 0) + 1
+        context.captionCounts[kind] = number
+        return "\(escape(word)) \(number). "
+    }
+
+    /// A block image: a paragraph that is one `image::` line.
+    static func isFigure(_ block: Block) -> Bool {
+        guard block.lines.count == 1 else {
+            return false
+        }
+        let line = block.lines[0].trimmed
+        return line.hasPrefix("image::") && line.hasSuffix("]")
     }
 
     static func isSection(_ kind: Block.Kind) -> Bool {
@@ -235,7 +282,10 @@ public enum HTMLRenderer {
             return "<p>\(inlineHTML(of: block.lines, context: context))</p>\n"
 
         case .admonition(let variant):
-            let label = variant.uppercased()
+            // The book's word for it — `:note-caption: Nota` — over the
+            // bare marker.
+            let label =
+                context.attributes["\(variant.lowercased())-caption"] ?? variant.uppercased()
             return "<aside class=\"admonition \(variant.lowercased())\">"
                 + "<strong>\(escape(label))</strong> "
                 + "<span>\(inlineHTML(of: block.lines, context: context))</span></aside>\n"
@@ -283,7 +333,7 @@ public enum HTMLRenderer {
             // HTML puts a table's caption inside the table, first.
             let caption =
                 block.title.map { title in
-                    "<caption>\(inlineHTML(of: title.text, context: context))</caption>\n"
+                    "<caption>\(self.caption(of: block, context: context))\(inlineHTML(of: title.text, context: context))</caption>\n"
                 } ?? ""
             return
                 "<table>\n\(caption)\(render(block.blocks, context: context))</table>\n"

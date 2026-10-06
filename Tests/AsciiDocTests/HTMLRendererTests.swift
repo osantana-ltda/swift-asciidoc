@@ -97,6 +97,38 @@ private func html(_ source: String) -> String {
     #expect(out.contains("Mind this."))
 }
 
+@Test func captionsComeFromTheBooksAttributesAndAreNumbered() {
+    // What a language's attributes file says reaches every chapter: the
+    // admonition's word, and the numbered captions of figures, tables and
+    // examples; a listing is captioned only when the book asks.
+    let context = RenderContext()
+    context.bookAttributes = [
+        "note-caption": "Nota", "figure-caption": "Figura", "table-caption": "Tabela",
+        "listing-caption": "Listagem",
+    ]
+    let document = Parser.parse(
+        "= T\n\nNOTE: Veja.\n\n.Um gato\nimage::gato.png[]\n\n.Outro\nimage::cao.png[]\n\n"
+            + ".Dados\n|===\n| a\n|===\n\n.Código\n----\nx\n----\n\n.Caso\n====\nAssim.\n====\n")
+    let out = HTMLRenderer.render(document, context: context)
+
+    #expect(out.contains("<strong>Nota</strong>"))
+    #expect(out.contains("<div class=\"title\">Figura 1. Um gato</div>"))
+    #expect(out.contains("<div class=\"title\">Figura 2. Outro</div>"))
+    #expect(out.contains("<caption>Tabela 1. Dados</caption>"))
+    #expect(out.contains("<div class=\"title\">Listagem 1. Código</div>"))
+    // No word set: Asciidoctor's English, and no listing caption at all.
+    let plain = html(
+        "= T\n\n.Um gato\nimage::gato.png[]\n\n.Código\n----\nx\n----\n\n.Caso\n====\nAssim.\n====\n"
+    )
+    #expect(plain.contains("<div class=\"title\">Figure 1. Um gato</div>"))
+    #expect(plain.contains("<div class=\"title\">Código</div>"))
+    #expect(plain.contains("<div class=\"title\">Example 1. Caso</div>"))
+    // The document's own header wins over the book's.
+    let own = HTMLRenderer.render(
+        Parser.parse("= T\n:note-caption: Olha\n\nNOTE: Veja.\n"), context: context)
+    #expect(own.contains("<strong>Olha</strong>"))
+}
+
 @Test func nestedListsRenderInsideTheirItem() {
     let out = html("= T\n\n* one\n** deep\n* two\n")
 
@@ -378,7 +410,8 @@ private func html(_ source: String) -> String {
 @Test func aTableTitleBecomesItsCaption() {
     let out = html("= T\n\n.Results by year\n|===\n| a | b\n|===\n")
 
-    #expect(out.contains("<table>\n<caption>Results by year</caption>"))
+    // Numbered, as Asciidoctor captions a table.
+    #expect(out.contains("<table>\n<caption>Table 1. Results by year</caption>"))
     // Never both: the caption is the table's title, not a sibling div.
     #expect(!out.contains("<div class=\"title\">Results by year</div>"))
 }
