@@ -1161,9 +1161,9 @@ extension Parser {
 
 // MARK: - Attribute lists
 
-enum AttributeListParser {
+public enum AttributeListParser {
     /// Parses the inside of a `[...]` line.
-    static func parse(_ text: String, range: SourceRange) -> BlockAttributes {
+    public static func parse(_ text: String, range: SourceRange) -> BlockAttributes {
         var attributes = BlockAttributes(range: range)
 
         var body = text
