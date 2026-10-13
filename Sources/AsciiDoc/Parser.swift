@@ -1220,6 +1220,15 @@ public enum AttributeListParser {
                 continue
             }
 
+            // Only the first field takes shorthand, as Asciidoctor reads
+            // it: a later `50%` is an image's width, `1.5` a number.
+            if position > 0 {
+                if !trimmed.isEmpty {
+                    attributes.positional.append(trimmed)
+                }
+                continue
+            }
+
             // Shorthand: `style#id.role1.role2%option`
             var shorthand = trimmed[...]
             var positional = ""

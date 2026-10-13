@@ -165,6 +165,23 @@ import Testing
     #expect(block.text == "let answer = 42\n// not a comment here, it is code")
 }
 
+/// Asciidoctor reads `#id`, `.role` and `%option` in the first field only:
+/// a later `50%` is a width, not an option; `1.5` is a number.
+@Test func onlyTheFirstFieldOfAnAttributeListTakesShorthand() {
+    let empty = SourceRange(
+        start: SourceLocation(offset: 0, line: 1, column: 1),
+        end: SourceLocation(offset: 0, line: 1, column: 1))
+    let image = AttributeListParser.parse("[Byte cover,50%,align=center]", range: empty)
+    #expect(image.positional == ["Byte cover", "50%"])
+    #expect(image.options.isEmpty)
+    #expect(image.named["align"] == "center")
+    let block = AttributeListParser.parse("[quote.lead%hardbreaks,Author,1.5]", range: empty)
+    #expect(block.style == "quote")
+    #expect(block.roles == ["lead"])
+    #expect(block.options == ["hardbreaks"])
+    #expect(block.positional == ["quote", "Author", "1.5"])
+}
+
 @Test func compoundBlocksParseTheirChildren() {
     let document = Parser.parse(
         """
