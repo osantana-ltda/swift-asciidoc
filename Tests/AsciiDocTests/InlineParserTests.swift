@@ -420,6 +420,28 @@ extension Inline.Macro {
     #expect(parsed[0].plainText == "Figure 1")
 }
 
+/// A bibliography entry's anchor: three brackets, and `[id]` is what a
+/// citation shows unless the anchor says otherwise.
+@Test func aBibliographyAnchorParsesWithItsBracketedIdAsReferenceText() {
+    let parsed = inlines("[[[knuth1984]]] Knuth, D. _The TeXbook_.")
+
+    guard case .anchor(let id, let reftext, let range) = parsed[0] else {
+        Issue.record("expected an anchor")
+        return
+    }
+    #expect(id == "knuth1984")
+    #expect(reftext == "[knuth1984]")
+    #expect(range.start.offset == 0)
+    #expect(range.end.offset == 15)
+    #expect(parsed[1].plainText == " Knuth, D. ")
+
+    guard case .anchor(_, let named, _) = inlines("[[[k, Knuth 1984]]]")[0] else {
+        Issue.record("expected an anchor")
+        return
+    }
+    #expect(named == "Knuth 1984")
+}
+
 @Test func bracketPairsAroundProseStayText() {
     // A space, an empty pair, an unclosed one, a line break inside.
     #expect(inlines("see [[not an id]] here").count == 1)

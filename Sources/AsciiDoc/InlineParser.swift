@@ -385,31 +385,41 @@ public enum InlineParser {
     /// `[[id]]` or `[[id,reftext]]` — an inline anchor. Ids follow the same
     /// shape references use; a bracket pair holding anything else — a
     /// citation-looking `[[1]]` is fine, prose is not — stays text.
+    ///
+    /// `[[[id]]]` is a bibliography anchor: the entry of a reference list a
+    /// citation `<<id>>` points at. Asciidoctor shows it, and a citation
+    /// without a label, as `[id]`; that is its reference text unless the
+    /// anchor gives one.
     private static func matchAnchor(
         in characters: ArraySlice<Positioned>, at index: Int
     ) -> (id: String, reftext: String, range: SourceRange, next: Int)? {
         guard matches("[[", in: characters, at: index) else {
             return nil
         }
-        var cursor = index + 2
+        let bibliographic = matches("[[[", in: characters, at: index)
+        let brackets = bibliographic ? 3 : 2
+        var cursor = index + brackets
         var inner = ""
 
-        while cursor + 1 < characters.endIndex {
-            if characters[cursor].character == "]", characters[cursor + 1].character == "]" {
+        while cursor + brackets - 1 < characters.endIndex {
+            if (0..<brackets).allSatisfy({ characters[cursor + $0].character == "]" }) {
                 let comma = inner.firstIndex(of: ",")
                 let id = trimmed(comma.map { String(inner[inner.startIndex..<$0]) } ?? inner)
-                let reftext = trimmed(
+                var reftext = trimmed(
                     comma.map { String(inner[inner.index(after: $0)...]) } ?? "")
                 guard !id.isEmpty, id.allSatisfy(isIdentifier) else {
                     return nil
+                }
+                if bibliographic, reftext.isEmpty {
+                    reftext = "[\(id)]"
                 }
                 return (
                     id, reftext,
                     SourceRange(
                         start: characters[index].location,
-                        end: characters[cursor + 1].end
+                        end: characters[cursor + brackets - 1].end
                     ),
-                    cursor + 2
+                    cursor + brackets
                 )
             }
             // An anchor never spans lines.
